@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 const SECRET_KEY = process.env.JWT_SECRET || "yourSecretKey";
 
 export const authenticate = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1]; // Bearer <token>
+  const token = req.headers.authorization?.split(" ")[1]; 
 
   if (!token) {
     return res.status(401).json({ 
@@ -15,7 +15,6 @@ export const authenticate = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, SECRET_KEY);
     
-    // Check if token is expired
     if (decoded.exp * 1000 < Date.now()) {
       return res.status(401).json({ 
         error: "Token expired",
@@ -33,7 +32,6 @@ export const authenticate = (req, res, next) => {
   }
 };
 
-// Optional: Middleware to check specific roles
 export const authorize = (roles = []) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {

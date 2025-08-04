@@ -52,7 +52,6 @@ app.post("/signup", async (req, res) => {
   try {
     const { name, age, email, password } = req.body;
 
-    // Optional: Check if user already exists
     const existingUser = await UserModel.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "Email already registered" });
@@ -86,7 +85,6 @@ app.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Create token with user info
     const token = jwt.sign(
       { userId: user._id, name: user.name, email: user.email },
       SECRET_KEY,
@@ -116,7 +114,6 @@ const auth = (req, res, next) => {
 };
 
 
-// Transaction Schema & Model
 const transactionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'users', required: true },
   title: String,
@@ -129,7 +126,6 @@ const transactionSchema = new mongoose.Schema({
 
 const TransactionModel = mongoose.model("transactions", transactionSchema);
 
-// Create a new transaction
 app.post("/transactions", auth, async (req, res) => {
   try {
     const newTransaction = new TransactionModel({
@@ -144,7 +140,6 @@ app.post("/transactions", auth, async (req, res) => {
 });
 
 
-// Get all transactions
 app.get("/transactions", auth, async (req, res) => {
   try {
     const transactions = await TransactionModel.find({ userId: req.userId });
@@ -155,7 +150,6 @@ app.get("/transactions", auth, async (req, res) => {
 });
 
 
-// Update a transaction
 app.put("/transactions/:id", async (req, res) => {
   try {
     const updatedTransaction = await TransactionModel.findByIdAndUpdate(
@@ -169,7 +163,7 @@ app.put("/transactions/:id", async (req, res) => {
   }
 });
 
-// Delete a transaction
+
 app.delete("/transactions/:id", async (req, res) => {
   try {
     await TransactionModel.findByIdAndDelete(req.params.id);

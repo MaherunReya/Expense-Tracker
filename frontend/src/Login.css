@@ -86,7 +86,6 @@
   background: var(--dark-green);
 }
 
-/* Responsive tweaks */
 @media (max-width: 480px) {
   .login-form {
     padding: 2rem 2rem;
