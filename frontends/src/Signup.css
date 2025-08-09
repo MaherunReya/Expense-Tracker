@@ -1,0 +1,115 @@
+
+.signup-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--light-gray);
+  font-family: inherit;
+}
+
+.signup-container {
+  width: 100%;
+  max-width: 420px;
+  padding: 2rem;
+  background: var(--white);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  margin: 1rem;
+}
+
+.signup-title {
+  color: var(--dark-green);
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: var(--text-dark);
+  font-size: 0.95rem;
+}
+
+.form-group input {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--medium-gray);
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: var(--transition);
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary-green);
+  box-shadow: 0 0 0 3px var(--translucent-green);
+}
+
+.signup-button {
+  padding: 0.75rem;
+  background-color: var(--primary-green);
+  color: var(--white);
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 0.5rem;
+}
+
+.signup-button:hover {
+  background-color: var(--dark-green);
+}
+
+.error-message {
+  color: var(--danger);
+  background-color: rgba(244, 67, 54, 0.1);
+  padding: 0.75rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  text-align: center;
+  border: 1px solid rgba(244, 67, 54, 0.2);
+}
+
+@media (max-width: 480px) {
+  .signup-container {
+    padding: 1.5rem;
+    margin: 0 1rem;
+  }
+  
+  .signup-title {
+    font-size: 1.5rem;
+  }
+}
+
+.signup-container a {
+  color: var(--primary-green);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.signup-container a:hover {
+  text-decoration: underline;
+}
+
+.login-link {
+  text-align: center;
+  margin-top: 1rem;
+  color: var(--dark-gray);
+  font-size: 0.95rem;
+}
