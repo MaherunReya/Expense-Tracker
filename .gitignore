@@ -7,7 +7,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+<<<<<<< HEAD
 
+=======
+frontends/node_modules/
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
 dist
 dist-ssr
 *.local
@@ -40,11 +44,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+<<<<<<< HEAD
 frontends/node_modules/
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
 frontends/eslint.config.js
 frontends/package.json
 frontends/package-lock.json
 frontends/vite.config.js
+<<<<<<< HEAD
 frontends/README.md
 frontends/src/index.css
 frontends/src/UserProfileCard.jsx
@@ -59,3 +67,8 @@ node_modules/
 package-lock.json
 package.json
 .git/
+=======
+
+backends/package.json
+backends/package-lock.json
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd

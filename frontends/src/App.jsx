@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useState } from 'react';
 import { FaWallet, FaExchangeAlt, FaChartPie, FaBell, FaCog, FaSearch, FaArrowUp, FaDollarSign, FaShoppingBag } from 'react-icons/fa';
 import './App.css';
@@ -187,3 +188,19 @@ const AuthenticatedView = ({ user }) => (
 );
 
 export default Homepage;
+=======
+import { useState } from 'react'
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+import './App.css'
+
+function App() {
+  const [count, setCount] = useState(0)
+
+  return (
+    <h1>App Page</h1>
+  )
+}
+
+export default App
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd

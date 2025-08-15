@@ -63,12 +63,20 @@ app.post("/signup", async (req, res) => {
     const newUser = new UserModel({ name, age, email, password: hashedPassword });
     await newUser.save();
 
+<<<<<<< HEAD
+=======
+    // generate token
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
     const token = jwt.sign(
       { userId: newUser._id, name: newUser.name, email: newUser.email },
       SECRET_KEY,
       { expiresIn: "1h" }
     );
 
+<<<<<<< HEAD
+=======
+    // send token with response
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
     res.status(201).json({ message: "Signup successful", token });
   } catch (error) {
     console.error("Signup error:", error);
@@ -76,7 +84,12 @@ app.post("/signup", async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
  
+=======
+
+const SECRET_KEY = process.env.JWT_SECRET || "yourSecretKey"; 
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;

@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './dashboard.css';
 import { jwtDecode } from 'jwt-decode';
+<<<<<<< HEAD
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -12,6 +15,7 @@ const Dashboard = () => {
   const [totalExpense, setTotalExpense] = useState(0);
   const [monthlySummary, setMonthlySummary] = useState({});
   const [yearlySummary, setYearlySummary] = useState({});
+<<<<<<< HEAD
   const [activeChart, setActiveChart] = useState('bar');
   
   // Budget Alert System States
@@ -24,6 +28,8 @@ const Dashboard = () => {
     alertThreshold: 80 // Alert when 80% of budget is reached
   });
   
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
   const [formData, setFormData] = useState({
     title: '',
     amount: '',
@@ -33,6 +39,7 @@ const Dashboard = () => {
   });
   const [editId, setEditId] = useState(null);
 
+<<<<<<< HEAD
   // Predefined categories for better organization
   const predefinedCategories = [
     'Food & Dining',
@@ -47,6 +54,8 @@ const Dashboard = () => {
     'Other'
   ];
 
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
   const token = localStorage.getItem("token");
   const config = {
     headers: {
@@ -56,6 +65,7 @@ const Dashboard = () => {
 
   const API_URL = 'http://localhost:8000';
 
+<<<<<<< HEAD
   useEffect(() => {
     if (!token) {
       window.location.href = '/login';
@@ -202,11 +212,70 @@ const Dashboard = () => {
     saveBudgets(updatedBudgets);
     checkBudgetAlerts();
   };
+=======
+
+useEffect(() => {
+  if (!token) {
+    window.location.href = '/login';
+    return;
+  }
+
+  try {
+    const decoded = jwtDecode(token);
+    if (decoded.exp * 1000 < Date.now()) {
+      throw new Error('Token expired');
+    }
+    setUser(decoded);
+    fetchTransactions();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  }
+}, [token]);
+
+
+const fetchTransactions = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const config = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    };
+
+    const res = await axios.get(`${API_URL}/transactions`, config);
+    const data = res.data;
+
+    setTransactions(data);
+
+    const summary = calculateCategorySummary(data);
+    setCategorySummary(summary);
+
+    let income = 0;
+    let expense = 0;
+    data.forEach(txn => {
+      if (txn.type === 'income') income += Number(txn.amount);
+      else if (txn.type === 'expense') expense += Number(txn.amount);
+    });
+    setTotalIncome(income);
+    setTotalExpense(expense);
+
+    setMonthlySummary(getMonthlySummary(data));
+    setYearlySummary(getYearlySummary(data));
+  } catch (error) {
+    console.error('Error fetching transactions:', error.response?.data || error.message);
+  }
+};
+
+
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
 
   const calculateCategorySummary = (transactions) => {
     const summary = {};
 
     transactions.forEach((txn) => {
+<<<<<<< HEAD
       const category = txn.category?.trim() || txn.title?.trim() || 'Uncategorized';
       const type = txn.type;
 
@@ -218,6 +287,19 @@ const Dashboard = () => {
         summary[category].income += Number(txn.amount);
       } else if (type === 'expense') {
         summary[category].expense += Number(txn.amount);
+=======
+      const title = txn.title?.trim() || 'Untitled';
+      const type = txn.type;
+
+      if (!summary[title]) {
+        summary[title] = { income: 0, expense: 0 };
+      }
+
+      if (type === 'income') {
+        summary[title].income += Number(txn.amount);
+      } else if (type === 'expense') {
+        summary[title].expense += Number(txn.amount);
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
       }
     });
 
@@ -228,6 +310,7 @@ const Dashboard = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+<<<<<<< HEAD
   const handleBudgetFormChange = (e) => {
     setBudgetFormData({ ...budgetFormData, [e.target.name]: e.target.value });
   };
@@ -260,6 +343,38 @@ const Dashboard = () => {
       console.error('Error saving transaction:', error.response?.data || error.message);
     }
   };
+=======
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  const token = localStorage.getItem("token");
+  const config = {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
+
+  try {
+    if (editId) {
+      await axios.put(`${API_URL}/transactions/${editId}`, formData, config);
+    } else {
+      await axios.post(
+        `${API_URL}/transactions`,
+        { ...formData, date: new Date().toISOString() },
+        config
+      );
+    }
+
+    setFormData({ title: '', amount: '', type: 'income', category: '' });
+    setEditId(null);
+    fetchTransactions();
+  } catch (error) {
+    console.error('Error saving transaction:', error.response?.data || error.message);
+  }
+};
+
+
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
 
   const handleEdit = (txn) => {
     setFormData({
@@ -281,6 +396,7 @@ const Dashboard = () => {
   };
 
   const getMonthlySummary = (transactions) => {
+<<<<<<< HEAD
     const summary = {};
 
     transactions.forEach(({ amount, type, date }) => {
@@ -522,6 +638,51 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
+=======
+  const summary = {};
+
+  transactions.forEach(({ amount, type, date }) => {
+    if (!date) return; 
+
+    const d = new Date(date);
+    if (isNaN(d)) return; 
+
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+    if (!summary[monthKey]) summary[monthKey] = { income: 0, expense: 0 };
+
+    if (type === 'income') summary[monthKey].income += Number(amount);
+    else if (type === 'expense') summary[monthKey].expense += Number(amount);
+  });
+
+  return summary;
+};
+
+const getYearlySummary = (transactions) => {
+  const summary = {};
+
+  transactions.forEach(({ amount, type, date }) => {
+    if (!date) return;
+
+    const d = new Date(date);
+    if (isNaN(d)) return;
+
+    const yearKey = `${d.getFullYear()}`;
+
+    if (!summary[yearKey]) summary[yearKey] = { income: 0, expense: 0 };
+
+    if (type === 'income') summary[yearKey].income += Number(amount);
+    else if (type === 'expense') summary[yearKey].expense += Number(amount);
+  });
+
+  return summary;
+};
+
+
+  return (
+    <div className="dashboard-container">
+
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
       <div className="sidebar">
         <div className="sidebar-header">
           <h2>Finance App</h2>
@@ -530,6 +691,10 @@ const Dashboard = () => {
           <div className="user-avatar">{user?.name?.charAt(0) || "U"}</div>
           <div className="user-details">
             <h3>{user?.name || "User Name"}</h3>
+<<<<<<< HEAD
+=======
+            <p>{user?.email || "user@example.com"}</p>
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
           </div>
         </div>
 
@@ -547,6 +712,7 @@ const Dashboard = () => {
           <p>Welcome back! Here's your financial summary.</p>
         </div>
 
+<<<<<<< HEAD
         {/* Budget Alerts Section */}
         {budgetAlerts.length > 0 && (
           <div className="budget-alerts-container">
@@ -702,6 +868,23 @@ const Dashboard = () => {
           )}
         </div>
 
+=======
+        <div className="summary-grid">
+          <div className="summary-card income-card">
+            <h3>Total Income</h3>
+            <p>${totalIncome}</p>
+          </div>
+          <div className="summary-card expense-card">
+            <h3>Total Expense</h3>
+            <p>${totalExpense}</p>
+          </div>
+          <div className="summary-card balance-card">
+            <h3>Balance</h3>
+            <p>${totalIncome - totalExpense}</p>
+          </div>
+        </div>
+
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
         <div className="card">
           <h2>{editId ? 'Edit Transaction' : 'Add Transaction'}</h2>
           <form onSubmit={handleSubmit}>
@@ -721,13 +904,17 @@ const Dashboard = () => {
                 placeholder="Amount"
                 onChange={handleChange}
                 required
+<<<<<<< HEAD
                 step="0.01"
                 min="0"
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
               />
               <select name="type" value={formData.type} onChange={handleChange}>
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
               </select>
+<<<<<<< HEAD
               <select 
                 name="category" 
                 value={formData.category} 
@@ -738,6 +925,8 @@ const Dashboard = () => {
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
             </div>
             <div className="form-actions">
               <button type="submit" className="primary-btn">
@@ -765,7 +954,10 @@ const Dashboard = () => {
                   <th>Title</th>
                   <th>Amount</th>
                   <th>Type</th>
+<<<<<<< HEAD
                   <th>Category</th>
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -779,7 +971,10 @@ const Dashboard = () => {
                         {txn.type}
                       </span>
                     </td>
+<<<<<<< HEAD
                     <td>{txn.category || 'Uncategorized'}</td>
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
                     <td className="actions">
                       <button
                         className="icon-btn edit"
@@ -801,6 +996,7 @@ const Dashboard = () => {
           </div>
         </div>
 
+<<<<<<< HEAD
         {/* Enhanced Charts Section */}
         <div className="card enhanced-charts">
           <div className="charts-header">
@@ -835,6 +1031,8 @@ const Dashboard = () => {
           </div>
         </div>
 
+=======
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
         <div className="card">
           <h2>Category Summary</h2>
           <div className="table-container">
@@ -850,8 +1048,13 @@ const Dashboard = () => {
                 {Object.entries(categorySummary).map(([title, values]) => (
                   <tr key={title}>
                     <td>{title}</td>
+<<<<<<< HEAD
                     <td className="income">${values.income.toFixed(2)}</td>
                     <td className="expense">${values.expense.toFixed(2)}</td>
+=======
+                    <td className="income">${values.income}</td>
+                    <td className="expense">${values.expense}</td>
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
                   </tr>
                 ))}
               </tbody>
@@ -910,6 +1113,11 @@ const Dashboard = () => {
             </table>
           </div>
         </div>
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 921ba539bb809ca69a1c0efa4cd1a0ab5fe70ecd
       </div>
     </div>
   );
