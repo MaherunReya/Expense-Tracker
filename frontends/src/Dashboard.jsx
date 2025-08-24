@@ -15,7 +15,7 @@ const Dashboard = () => {
   const [yearlySummary, setYearlySummary] = useState({});
   const [activeChart, setActiveChart] = useState('bar');
   
-  // Budget Alert System States
+  // Budget Alert System
   const [budgets, setBudgets] = useState([]);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [budgetAlerts, setBudgetAlerts] = useState([]);
@@ -25,7 +25,7 @@ const Dashboard = () => {
     alertThreshold: 80
   });
 
-  // Recurring Bills States
+  // Recurring Bills 
   const [recurringBills, setRecurringBills] = useState([]);
   const [showBillForm, setShowBillForm] = useState(false);
   const [billAlerts, setBillAlerts] = useState([]);
@@ -109,7 +109,6 @@ const Dashboard = () => {
     }
   }, [token]);
 
-  // Load budgets
  const loadBudgets = async () => {
   try {
     const res = await axios.get(`${API_URL}/budgets`, config);
@@ -450,7 +449,7 @@ const editDebt = (debt) => {
     }
   }, [user, transactions, budgets]);
 
-  // Budget Alert Logic
+  // Budget Alert
   const checkBudgetAlerts = (transactionData = transactions) => {
     const currentMonth = new Date().toISOString().slice(0, 7);
     const alerts = [];
@@ -473,8 +472,6 @@ const editDebt = (debt) => {
     setBudgetAlerts(alerts);
   };
 
-
-  // Budget Form Handlers
   const handleBudgetSubmit = async (e) => {
     e.preventDefault();
     
@@ -845,42 +842,47 @@ const editDebt = (debt) => {
   };
 
     const handleExport = async (format) => {
-  try {
-    const params = new URLSearchParams();
-    if (exportFilters.startDate) params.append('startDate', exportFilters.startDate);
-    if (exportFilters.endDate) params.append('endDate', exportFilters.endDate);
-    if (exportFilters.type) params.append('type', exportFilters.type);
-    if (exportFilters.category) params.append('category', exportFilters.category);
+    try {
+      const params = new URLSearchParams();
+      if (exportFilters.startDate) params.append('startDate', exportFilters.startDate);
+      if (exportFilters.endDate) params.append('endDate', exportFilters.endDate);
+      if (exportFilters.type) params.append('type', exportFilters.type);
+      if (exportFilters.category) params.append('category', exportFilters.category);
 
-    const url = `${API_URL}/transactions/export/${format}?${params.toString()}`;
+      const url = `${API_URL}/transactions/export/${format}?${params.toString()}`;
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Export failed: ${response.status} ${response.statusText}`);
       }
-    });
 
-    if (!response.ok) throw new Error('Export failed');
-
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `transactions.${format}`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    // delay revoking the object URL
-    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
-
-  } catch (error) {
-    console.error('Export error:', error);
-    alert('Failed to export data. Please try again.');
-  }
-};
-
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = downloadUrl;
+      link.download = `transactions_${new Date().toISOString().split('T')[0]}.${format}`;
+      link.target = '_blank'; 
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      }, 100);
+      
+    } catch (error) {
+      console.error('Export error:', error);
+      alert(`Failed to export data: ${error.message}`);
+    }
+  };
 
   return (
     <div className="dashboard-container">

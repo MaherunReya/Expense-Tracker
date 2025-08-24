@@ -480,11 +480,13 @@ app.get("/debts/:id/payments", auth, async (req, res) => {
 });
 
 
+
+//CSV export 
 app.get("/transactions/export/csv", auth, async (req, res) => {
   try {
     const { startDate, endDate, type, category } = req.query;
     let query = { userId: req.userId };
-
+    
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -494,30 +496,38 @@ app.get("/transactions/export/csv", auth, async (req, res) => {
     if (category) query.category = category;
     
     const transactions = await TransactionModel.find(query).sort({ date: -1 });
-
+    
     let csvContent = 'Date,Title,Amount,Type,Category\n';
     transactions.forEach(txn => {
-      const date = txn.date ? new Date(txn.date).toISOString().split('T')[0] : '';
+      const dateObj = new Date(txn.date);
+      const formattedDate = dateObj.toISOString().split('T')[0];
 
-      const title = `"${txn.title.replace(/"/g, '""')}"`;
-      const category = txn.category || 'Uncategorized';
-      csvContent += `${date},${title},${txn.amount},${txn.type},${category}\n`;
+      const title = `"${(txn.title || 'Untitled').replace(/"/g, '""')}"`;
+      const category = `"${(txn.category || 'Uncategorized').replace(/"/g, '""')}"`;
+      const amount = (Number(txn.amount) || 0).toFixed(2);
+      const type = txn.type || 'unknown';
+      
+      csvContent += `${formattedDate},${title},${amount},${type},${category}\n`;
     });
     
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=transactions.csv');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="transactions.csv"');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
     res.send(csvContent);
   } catch (error) {
-    res.status(500).json({ error: "Failed to export CSV" });
+    console.error('CSV export error:', error);
+    res.status(500).json({ error: "Failed to export CSV: " + error.message });
   }
 });
 
-// Export transactions as PDF
+//PDF export 
 app.get("/transactions/export/pdf", auth, async (req, res) => {
   try {
     const { startDate, endDate, type, category } = req.query;
     let query = { userId: req.userId };
-
+    
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -529,50 +539,107 @@ app.get("/transactions/export/pdf", auth, async (req, res) => {
     const transactions = await TransactionModel.find(query).sort({ date: -1 });
     const user = await UserModel.findById(req.userId);
     
-    const doc = new PDFDocument();
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=transactions.pdf');
-    
-    doc.pipe(res);
-    doc.fontSize(20).text('Financial Transactions Report', 50, 50);
-    doc.fontSize(12).text(`Generated for: ${user.name}`, 50, 80);
-    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 50, 95);
-    
-    const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-    
-    doc.text(`Total Income: $${totalIncome.toFixed(2)}`, 50, 120);
-    doc.text(`Total Expenses: $${totalExpense.toFixed(2)}`, 50, 135);
-    doc.text(`Net Balance: $${(totalIncome - totalExpense).toFixed(2)}`, 50, 150);
+    res.setHeader('Content-Disposition', 'attachment; filename="transactions.pdf"');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
-    let yPosition = 180;
-    doc.text('Date', 50, yPosition);
-    doc.text('Title', 120, yPosition);
-    doc.text('Amount', 300, yPosition);
-    doc.text('Type', 380, yPosition);
-    doc.text('Category', 450, yPosition);
+    const doc = new PDFDocument({ margin: 50 });
 
-    doc.moveTo(50, yPosition + 15).lineTo(550, yPosition + 15).stroke();
-    yPosition += 25;
-
-    transactions.forEach(txn => {
-      if (yPosition > 700) {
-        doc.addPage();
-        yPosition = 50;
-      }
-      
-      const date = new Date(txn.date).toLocaleDateString();
-      doc.fontSize(10);
-      doc.text(date, 50, yPosition);
-      doc.text(txn.title.substring(0, 25), 120, yPosition);
-      doc.text(`$${txn.amount.toFixed(2)}`, 300, yPosition);
-      doc.text(txn.type, 380, yPosition);
-      doc.text(txn.category || 'N/A', 450, yPosition);
-      yPosition += 15;
+    doc.on('error', (err) => {
+      console.error('PDF generation error:', err);
     });
+
+    doc.pipe(res);
+
+    doc.fontSize(20).text('Financial Transactions Report', 50, 50);
+    doc.fontSize(12);
+    doc.text(`Generated for: ${user.name || 'Unknown User'}`, 50, 80);
+    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 50, 95);
+
+    let filterY = 110;
+    if (startDate || endDate) {
+      doc.text(`Date Range: ${startDate || 'All'} to ${endDate || 'All'}`, 50, filterY);
+      filterY += 15;
+    }
+    if (type) {
+      doc.text(`Type Filter: ${type}`, 50, filterY);
+      filterY += 15;
+    }
+    if (category) {
+      doc.text(`Category Filter: ${category}`, 50, filterY);
+      filterY += 15;
+    }
+
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const totalExpense = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
     
+    let summaryY = filterY + 10;
+    doc.fontSize(14).text('Summary:', 50, summaryY);
+    doc.fontSize(12);
+    doc.text(`Total Income: $${totalIncome.toFixed(2)}`, 50, summaryY + 20);
+    doc.text(`Total Expenses: $${totalExpense.toFixed(2)}`, 50, summaryY + 35);
+    doc.text(`Net Balance: $${(totalIncome - totalExpense).toFixed(2)}`, 50, summaryY + 50);
+
+    if (transactions.length > 0) {
+      let yPosition = summaryY + 80;
+
+      doc.fontSize(10).fillColor('black');
+      doc.text('Date', 50, yPosition);
+      doc.text('Title', 120, yPosition);
+      doc.text('Amount', 320, yPosition);
+      doc.text('Type', 380, yPosition);
+      doc.text('Category', 430, yPosition);
+
+      doc.moveTo(50, yPosition + 15).lineTo(550, yPosition + 15).stroke();
+      yPosition += 25;
+
+      transactions.forEach((txn) => {
+        if (yPosition > 720) {
+          doc.addPage();
+          yPosition = 50;
+          doc.fontSize(10);
+          doc.text('Date', 50, yPosition);
+          doc.text('Title', 120, yPosition);
+          doc.text('Amount', 320, yPosition);
+          doc.text('Type', 380, yPosition);
+          doc.text('Category', 430, yPosition);
+          doc.moveTo(50, yPosition + 15).lineTo(550, yPosition + 15).stroke();
+          yPosition += 25;
+        }
+        
+        const date = new Date(txn.date).toLocaleDateString() || 'N/A';
+        const title = (txn.title || 'Untitled').substring(0, 30);
+        const amount = Number(txn.amount) || 0;
+        const type = txn.type || 'N/A';
+        const category = (txn.category || 'Uncategorized').substring(0, 15);
+        
+        doc.fontSize(9);
+        doc.text(date, 50, yPosition);
+        doc.text(title, 120, yPosition);
+        doc.text(`$${amount.toFixed(2)}`, 320, yPosition);
+        doc.text(type, 380, yPosition);
+        doc.text(category, 430, yPosition);
+        yPosition += 15;
+      });
+    } else {
+      doc.fontSize(12).text('No transactions found for the selected criteria.', 50, summaryY + 80);
+    }
     doc.end();
+    
   } catch (error) {
-    res.status(500).json({ error: "Failed to export PDF" });
+    console.error('PDF export error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to export PDF: " + error.message });
+    }
   }
 });
+
