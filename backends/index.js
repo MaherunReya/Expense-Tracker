@@ -110,7 +110,12 @@ app.post('/login', async (req, res) => {
   }
 });
 
-;
+app.use(cors({
+  origin: 'http://localhost:5173', 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
@@ -125,6 +130,24 @@ const auth = (req, res, next) => {
   }
 };
 
+const formatCurrency = (amount, currency = 'BDT') => {
+  const num = Number(amount) || 0;
+  
+  const currencySymbols = {
+    'BDT': '৳',
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
+    'INR': '₹',
+    'JPY': '¥',
+    'CNY': '¥',
+    'AUD': 'A$',
+    'CAD': 'C$'
+  };
+  
+  const symbol = currencySymbols[currency] || currency;
+  return `${symbol}${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const transactionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'users', required: true },
@@ -506,6 +529,9 @@ app.get("/debts/:id/payments", auth, async (req, res) => {
 //CSV export 
 app.get("/transactions/export/csv", auth, async (req, res) => {
   try {
+    console.log('CSV export started for user:', req.userId);
+    console.log('Query parameters:', req.query);
+    
     const { startDate, endDate, type, category } = req.query;
     let query = { userId: req.userId };
     
@@ -514,38 +540,90 @@ app.get("/transactions/export/csv", auth, async (req, res) => {
       if (startDate) query.date.$gte = new Date(startDate);
       if (endDate) query.date.$lte = new Date(endDate);
     }
-    if (type) query.type = type;
-    if (category) query.category = category;
+    if (type && type !== 'all') query.type = type;
+    if (category && category !== 'all') query.category = category;
+    
+    console.log('MongoDB query:', JSON.stringify(query));
     
     const transactions = await TransactionModel.find(query).sort({ date: -1 });
+    console.log(`Found ${transactions.length} transactions`);
+    
+    let preferences;
+    try {
+      preferences = await UserPreferencesModel.findOne({ userId: req.userId });
+    } catch (prefError) {
+      console.warn('Could not fetch user preferences, using defaults:', prefError.message);
+      preferences = null;
+    }
+    
+    let totalIncome = 0;
+    let totalExpense = 0;
+    
+    transactions.forEach(txn => {
+      const amount = Number(txn.amount) || 0;
+      if (txn.type === 'income') {
+        totalIncome += amount;
+      } else if (txn.type === 'expense') {
+        totalExpense += amount;
+      }
+    });
     
     let csvContent = 'Date,Title,Amount,Type,Category\n';
-    transactions.forEach(txn => {
-      const dateObj = txn.date ? new Date(txn.date) : new Date();
-      const formattedDate = !isNaN(dateObj) ? dateObj.toISOString().split('T')[0] : 'N/A';
+    
+    if (transactions.length === 0) {
+      csvContent += 'No transactions found for the selected criteria\n';
+    } else {
+      transactions.forEach(txn => {
+        try {
+          const dateObj = txn.date ? new Date(txn.date) : new Date();
+          const formattedDate = !isNaN(dateObj) ? dateObj.toISOString().split('T')[0] : 'N/A';
 
-      const title = `"${(txn.title || 'Untitled').replace(/"/g, '""')}"`;
-      const category = `"${(txn.category || 'Uncategorized').replace(/"/g, '""')}"`;
-      const amount = (Number(txn.amount) || 0).toFixed(2);
-      const type = txn.type || 'unknown';
-      
-      csvContent += `${formattedDate},${title},${amount},${type},${category}\n`;
-    });
+          const title = `"${(txn.title || 'Untitled').replace(/"/g, '""')}"`;
+          const categoryName = `"${(txn.category || 'Uncategorized').replace(/"/g, '""')}"`;
+          const amount = Number(txn.amount) || 0;
+          const type = txn.type || 'unknown';
+          
+          csvContent += `${formattedDate},${title},"${amount}",${type},${categoryName}\n`;
+        } catch (rowError) {
+          console.error('Error processing transaction row:', rowError);
+          csvContent += `Error processing transaction,,,Error,\n`;
+        }
+      });
+    }
+    
+    csvContent += '\nSummary\n';
+    csvContent += `Total Income,,,"${totalIncome}",\n`;
+    csvContent += `Total Expense,,,"${totalExpense}",\n`;
+    csvContent += `Net Balance,,,"${totalIncome - totalExpense}",\n`;
+    csvContent += `Export Date,,,"${new Date().toISOString()}",\n`;
     
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="transactions.csv"');
     res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.setHeader('Content-Length', Buffer.byteLength(csvContent, 'utf8'));
     
-    res.send(csvContent);
+    console.log('CSV export completed successfully');
+    res.status(200).send(csvContent);
   } catch (error) {
     console.error('CSV export error:', error);
-    res.status(500).json({ error: "Failed to export CSV: " + error.message });
+    
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: "Failed to export CSV", 
+        message: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
   }
 });
 
-//PDF export 
+//PDF export
 app.get("/transactions/export/pdf", auth, async (req, res) => {
   try {
+    console.log('PDF export started for user:', req.userId);
+    
     const { startDate, endDate, type, category } = req.query;
     let query = { userId: req.userId };
     
@@ -554,8 +632,8 @@ app.get("/transactions/export/pdf", auth, async (req, res) => {
       if (startDate) query.date.$gte = new Date(startDate);
       if (endDate) query.date.$lte = new Date(endDate);
     }
-    if (type) query.type = type;
-    if (category) query.category = category;
+    if (type && type !== 'all') query.type = type;
+    if (category && category !== 'all') query.category = category;
     
     const transactions = await TransactionModel.find(query).sort({ date: -1 });
     const user = await UserModel.findById(req.userId);
@@ -564,107 +642,170 @@ app.get("/transactions/export/pdf", auth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Set headers before creating PDF
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="transactions.pdf"');
+    console.log(`Found ${transactions.length} transactions for PDF`);
+
+    let totalIncome = 0;
+    let totalExpense = 0;
     
-    const doc = new PDFDocument({ margin: 50 });
-    
-    // Handle PDF errors
-    doc.on('error', (err) => {
-      console.error('PDF generation error:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "PDF generation failed" });
+    transactions.forEach(txn => {
+      const amount = Number(txn.amount) || 0;
+      if (txn.type === 'income') {
+        totalIncome += amount;
+      } else if (txn.type === 'expense') {
+        totalExpense += amount;
       }
     });
 
-    // Pipe the PDF directly to response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="transactions.pdf"');
+    
+    const doc = new PDFDocument({ 
+      margin: 50,
+      info: {
+        Title: 'Financial Transactions Report',
+        Author: user.name || 'User',
+        Subject: 'Financial Report',
+        Keywords: 'transactions, finance, report'
+      }
+    });
+    
+    doc.on('error', (err) => {
+      console.error('PDF generation error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "PDF generation failed", message: err.message });
+      }
+    });
+
     doc.pipe(res);
 
-    // Add content
-    doc.fontSize(20).text('Financial Transactions Report', 50, 50);
-    doc.fontSize(12);
-    doc.text(`Generated for: ${user.name || 'Unknown User'}`, 50, 80);
-    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 50, 95);
+    try {
+      doc.font('Helvetica');
+      
+      const formatForPDF = (amount) => {
+        const num = Number(amount) || 0;
+        return num.toLocaleString('en-US', { 
+          minimumFractionDigits: 2, 
+          maximumFractionDigits: 2 
+        });
+      };
 
-    // Add transactions table
-    if (transactions.length > 0) {
-      let yPosition = 140;
+      doc.fontSize(20).text('Financial Transactions Report', 50, 50);
+      doc.fontSize(12);
+      doc.text(`Generated for: ${user.name || 'Unknown User'}`, 50, 80);
+      doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 50, 95);
 
-      // Table headers
-      doc.fontSize(10).fillColor('black');
-      doc.text('Date', 50, yPosition);
-      doc.text('Title', 120, yPosition);
-      doc.text('Amount', 320, yPosition);
-      doc.text('Type', 380, yPosition);
-      doc.text('Category', 430, yPosition);
+      doc.fontSize(14).text('Summary:', 50, 140);
+      doc.fontSize(12);
+      
+      doc.text(`Total Income: ${formatForPDF(totalIncome)}`, 70, 160);
+      doc.text(`Total Expense: ${formatForPDF(totalExpense)}`, 70, 175);
+      doc.text(`Net Balance: ${formatForPDF(totalIncome - totalExpense)}`, 70, 190);
+      
+      doc.moveTo(50, 210).lineTo(550, 210).stroke();
 
-      doc.moveTo(50, yPosition + 15).lineTo(550, yPosition + 15).stroke();
-      yPosition += 25;
+      if (transactions.length > 0) {
+        let yPosition = 240;
 
-      transactions.forEach((txn) => {
-        if (yPosition > 720) {
+        doc.fontSize(10).fillColor('black');
+        doc.text('Date', 50, yPosition);
+        doc.text('Title', 120, yPosition);
+        doc.text('Amount', 320, yPosition);
+        doc.text('Type', 420, yPosition);
+        doc.text('Category', 480, yPosition);
+
+        doc.moveTo(50, yPosition + 15).lineTo(550, yPosition + 15).stroke();
+        yPosition += 25;
+
+        transactions.forEach((txn) => {
+          if (yPosition > 720) {
+            doc.addPage();
+            yPosition = 50;
+          }
+          
+          const dateObj = txn.date ? new Date(txn.date) : new Date();
+          const date = !isNaN(dateObj) ? dateObj.toLocaleDateString() : 'N/A';
+          
+          const title = (txn.title || 'Untitled').substring(0, 25);
+          const amount = Number(txn.amount) || 0;
+          const type = txn.type || 'N/A';
+          const categoryName = (txn.category || 'Uncategorized').substring(0, 12);
+          
+          doc.fontSize(9);
+          doc.text(date, 50, yPosition);
+          doc.text(title, 120, yPosition);
+          doc.text(formatForPDF(amount), 320, yPosition);
+          doc.text(type, 420, yPosition);
+          doc.text(categoryName, 480, yPosition);
+          yPosition += 15;
+        });
+        
+        if (yPosition > 680) {
           doc.addPage();
           yPosition = 50;
         }
         
-        // Fix date formatting here too
-        const dateObj = txn.date ? new Date(txn.date) : new Date();
-        const date = !isNaN(dateObj) ? dateObj.toLocaleDateString() : 'N/A';
-        
-        const title = (txn.title || 'Untitled').substring(0, 30);
-        const amount = Number(txn.amount) || 0;
-        const type = txn.type || 'N/A';
-        const category = (txn.category || 'Uncategorized').substring(0, 15);
-        
-        doc.fontSize(9);
-        doc.text(date, 50, yPosition);
-        doc.text(title, 120, yPosition);
-        doc.text(`$${amount.toFixed(2)}`, 320, yPosition);
-        doc.text(type, 380, yPosition);
-        doc.text(category, 430, yPosition);
+        yPosition += 20;
+        doc.moveTo(50, yPosition).lineTo(550, yPosition).stroke();
         yPosition += 15;
-      });
-    } else {
-      doc.fontSize(12).text('No transactions found for the selected criteria.', 50, 140);
-    }
+        
+        doc.fontSize(11).fillColor('black');
+        doc.text('Final Summary:', 50, yPosition);
+        yPosition += 20;
+        doc.fontSize(10);
+        doc.text(`Total Income: ${formatForPDF(totalIncome)}`, 70, yPosition);
+        yPosition += 15;
+        doc.text(`Total Expense: ${formatForPDF(totalExpense)}`, 70, yPosition);
+        yPosition += 15;
+        doc.text(`Net Balance: ${formatForPDF(totalIncome - totalExpense)}`, 70, yPosition);
+        
+      } else {
+        doc.fontSize(12).text('No transactions found for the selected criteria.', 50, 240);
+      }
 
-    // Finalize the PDF
-    doc.end();
+      console.log('PDF export completed successfully');
+      doc.end();
+      
+    } catch (pdfContentError) {
+      console.error('PDF content generation error:', pdfContentError);
+      doc.end();
+      throw pdfContentError;
+    }
     
   } catch (error) {
     console.error('PDF export error:', error);
     if (!res.headersSent) {
-      res.status(500).json({ error: "Failed to export PDF: " + error.message });
+      res.status(500).json({ 
+        error: "Failed to export PDF", 
+        message: error.message
+      });
     }
   }
 });
 
-// Tax estimation schema
+//Tax calculation function
 const taxEstimationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'users', required: true },
-  taxYear: String,
-  totalIncome: Number,
-  taxableIncome: Number,
-  totalTax: Number,
+  taxYear: { type: String, required: true },
+  totalIncome: { type: Number, required: true },
+  taxableIncome: { type: Number, required: true },
+  totalTax: { type: Number, required: true },
   exemptions: {
-    basic: Number,
-    investment: Number,
-    donation: Number,
-    disability: Number,
-    other: Number
+    basic: { type: Number, default: 350000 },
+    investment: { type: Number, default: 0 },
+    donation: { type: Number, default: 0 },
+    disability: { type: Number, default: 0 },
+    other: { type: Number, default: 0 }
   },
   taxBreakdown: [{
     slabRate: Number,
     slabIncome: Number,
     taxAmount: Number
   }],
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
-
 const TaxEstimationModel = mongoose.model("taxestimations", taxEstimationSchema);
 
-// Bangladesh tax calculation function
 const calculateBangladeshTax = (totalIncome, exemptions = {}) => {
   const income = Number(totalIncome) || 0;
   
@@ -679,7 +820,6 @@ const calculateBangladeshTax = (totalIncome, exemptions = {}) => {
   const totalExemption = Number(basic) + Number(investment) + Number(donation) + Number(disability) + Number(other);
   const taxableIncome = Math.max(0, income - totalExemption);
 
-  // Tax slabs for FY 2023-24
   const taxSlabs = [
     { min: 0, max: 350000, rate: 0 },
     { min: 350000, max: 450000, rate: 5 },
@@ -779,7 +919,6 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);

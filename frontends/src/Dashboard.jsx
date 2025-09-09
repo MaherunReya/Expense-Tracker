@@ -53,10 +53,11 @@ const Dashboard = () => {
     return `${symbol}${formattedAmount}`;
   };
 
-  const handleSettingsChange = (key, value) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-    localStorage.setItem(key, value);
-  };
+const handleSettingsChange = (key, value) => {
+  setSettings(prev => ({ ...prev, [key]: value }));
+  localStorage.setItem(key, value);
+  fetchTransactions(); 
+};
 
   const handleNotificationChange = (key, value) => {
     setSettings(prev => ({
@@ -65,6 +66,25 @@ const Dashboard = () => {
     }));
     localStorage.setItem(key, value);
   };
+  const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  if (!dateString || isNaN(date)) return 'Invalid Date';
+  
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  
+  switch(settings.dateFormat) {
+    case 'DD/MM/YYYY':
+      return `${day}/${month}/${year}`;
+    case 'MM/DD/YYYY':
+      return `${month}/${day}/${year}`;
+    case 'YYYY-MM-DD':
+      return `${year}-${month}-${day}`;
+    default:
+      return `${day}/${month}/${year}`;
+  }
+};
 
   const [budgets, setBudgets] = useState([]);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
@@ -946,45 +966,52 @@ const Dashboard = () => {
   };
 
   const handleExport = async (format) => {
-    try {
-      const params = new URLSearchParams();
-      if (exportFilters.startDate) params.append('startDate', exportFilters.startDate);
-      if (exportFilters.endDate) params.append('endDate', exportFilters.endDate);
-      if (exportFilters.type) params.append('type', exportFilters.type);
-      if (exportFilters.category) params.append('category', exportFilters.category);
-
-      const url = `${API_URL}/transactions/export/${format}?${params.toString()}`;
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Export failed: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `transactions_${new Date().toISOString().split('T')[0]}.${format}`;
-      
-      document.body.appendChild(link);
-      link.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-      }, 100);
-      
-    } catch (error) {
-      console.error('Export error:', error);
-      alert(`Failed to export data: ${error.message}`);
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      throw new Error('No authentication token found');
     }
-  };
+
+    const params = new URLSearchParams();
+    if (exportFilters.startDate) params.append('startDate', exportFilters.startDate);
+    if (exportFilters.endDate) params.append('endDate', exportFilters.endDate);
+    if (exportFilters.type) params.append('type', exportFilters.type);
+    if (exportFilters.category) params.append('category', exportFilters.category);
+
+    const url = `${API_URL}/transactions/export/${format}?${params.toString()}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Export failed: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `transactions_${new Date().toISOString().split('T')[0]}.${format}`;
+    
+    document.body.appendChild(link);
+    link.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    }, 100);
+    
+  } catch (error) {
+    console.error('Export error:', error);
+    alert(`Failed to export data: ${error.message}`);
+  }
+};
 
   const [showTaxForm, setShowTaxForm] = useState(false);
   const [taxResult, setTaxResult] = useState(null);
@@ -2245,6 +2272,7 @@ const Dashboard = () => {
                     <tr>
                       <th>Title</th>
                       <th>Amount</th>
+                      <th>Date</th>
                       <th>Type</th>
                       <th>Category</th>
                       <th>Receipt</th>
@@ -2255,7 +2283,8 @@ const Dashboard = () => {
                     {transactions.map((txn) => (
                       <tr key={txn._id}>
                         <td>{txn.title}</td>
-                        <td className={txn.type}>{formatCurrency(txn.amount)}</td>                        
+                        <td className={txn.type}>{formatCurrency(txn.amount)}</td> 
+                        <td>{formatDate(txn.date)}</td>                       
                         <td>
                           <span className={`type-badge ${txn.type}`}>
                             {txn.type}
@@ -2726,116 +2755,116 @@ const Dashboard = () => {
                 </div>
           )}
 
-      {taxResult && (
-          <div className="tax-result">
-            <h3>Tax Calculation Result</h3>
-            <div className="result-summary">
-              <div className="result-item">
-                <label>Total Income:</label>
-                <span>{formatCurrency(taxResult.totalIncome || 0)}</span>
-              </div>
-              <div className="result-item">
-                <label>Taxable Income:</label>
-                <span>{formatCurrency(taxResult.taxableIncome || 0)}</span>              
+          {taxResult && (
+              <div className="tax-result">
+                <h3>Tax Calculation Result</h3>
+                <div className="result-summary">
+                  <div className="result-item">
+                    <label>Total Income:</label>
+                    <span>{formatCurrency(taxResult.totalIncome || 0)}</span>
+                  </div>
+                  <div className="result-item">
+                    <label>Taxable Income:</label>
+                    <span>{formatCurrency(taxResult.taxableIncome || 0)}</span>              
+                    </div>
+                  <div className="result-item total-tax">
+                    <label>Total Tax Payable:</label>
+                    <span>{formatCurrency(taxResult.totalTax || 0)}</span>             
                 </div>
-              <div className="result-item total-tax">
-                <label>Total Tax Payable:</label>
-                <span>{formatCurrency(taxResult.totalTax || 0)}</span>             
-             </div>
-            </div>
-            
-            {taxResult.taxBreakdown && taxResult.taxBreakdown.length > 0 && (
-              <div className="tax-breakdown">
-                <h4>Tax Breakdown by Slabs:</h4>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Tax Rate</th>
-                      <th>Taxable Amount</th>
-                      <th>Tax Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {taxResult.taxBreakdown.map((slab, index) => (
-                      <tr key={index}>
-                        <td>{slab.slabRate || 0}%</td>
-                        <td>{formatCurrency(slab.slabIncome || 0)}</td>
-                        <td>{formatCurrency(slab.taxAmount || 0)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                </div>
+                
+                {taxResult.taxBreakdown && taxResult.taxBreakdown.length > 0 && (
+                  <div className="tax-breakdown">
+                    <h4>Tax Breakdown by Slabs:</h4>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Tax Rate</th>
+                          <th>Taxable Amount</th>
+                          <th>Tax Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {taxResult.taxBreakdown.map((slab, index) => (
+                          <tr key={index}>
+                            <td>{slab.slabRate || 0}%</td>
+                            <td>{formatCurrency(slab.slabIncome || 0)}</td>
+                            <td>{formatCurrency(slab.taxAmount || 0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                
+                <button className="secondary-btn" onClick={saveTaxEstimation}>
+                  Save Estimation
+                </button>
               </div>
             )}
-            
-            <button className="secondary-btn" onClick={saveTaxEstimation}>
-              Save Estimation
-            </button>
-          </div>
-        )}
 
-        {taxEstimations.length > 0 && (
-          <div className="saved-estimations">
-            <h3>Saved Tax Estimations</h3>
-            <div className="estimations-list">
-              {taxEstimations.slice(0, 5).map(estimation => (
-                <div key={estimation._id} className="estimation-card">
-                  <div className="estimation-header">
-                    <h4>Tax Year {estimation.taxYear || 'Unknown'}</h4>
-                    <span className="estimation-date">
-                      {new Date(estimation.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="estimation-details">
-                    <p>Income: {formatCurrency(estimation.totalIncome || 0)}</p>
-                    <p>Tax: {formatCurrency(estimation.totalTax || 0)}</p>
+            {taxEstimations.length > 0 && (
+              <div className="saved-estimations">
+                <h3>Saved Tax Estimations</h3>
+                <div className="estimations-list">
+                  {taxEstimations.slice(0, 5).map(estimation => (
+                    <div key={estimation._id} className="estimation-card">
+                      <div className="estimation-header">
+                        <h4>Tax Year {estimation.taxYear || 'Unknown'}</h4>
+                        <span className="estimation-date">
+                          {new Date(estimation.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="estimation-details">
+                        <p>Income: {formatCurrency(estimation.totalIncome || 0)}</p>
+                        <p>Tax: {formatCurrency(estimation.totalTax || 0)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+                </div>
+              </>
+            )}
+
+            {activePage === 'category' && (
+              <>
+                <div className="dashboard-header">
+                  <h1>Category Summary</h1>
+                  <p>View spending breakdown by categories.</p>
+                </div>
+
+                <div className="card">
+                  <h2>Category Summary</h2>
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Category</th>
+                          <th>Income</th>
+                          <th>Expense</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(categorySummary).map(([title, values]) => (
+                          <tr key={title}>
+                            <td>{title}</td>
+                            <td className="income">{formatCurrency(values.income)}</td>
+                            <td className="expense">{formatCurrency(values.expense)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-            </div>
-          </>
-        )}
-
-        {activePage === 'category' && (
-          <>
-            <div className="dashboard-header">
-              <h1>Category Summary</h1>
-              <p>View spending breakdown by categories.</p>
-            </div>
-
-            <div className="card">
-              <h2>Category Summary</h2>
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Category</th>
-                      <th>Income</th>
-                      <th>Expense</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(categorySummary).map(([title, values]) => (
-                      <tr key={title}>
-                        <td>{title}</td>
-                        <td className="income">{formatCurrency(values.income)}</td>
-                        <td className="expense">{formatCurrency(values.expense)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        )}
+              </>
+            )}
 
         
 
-        {activePage === 'reports' && (
-          <>
+            {activePage === 'reports' && (
+              <>
               <div className="card">
               <h2>Export Data</h2>
               <div className="export-section">
@@ -2867,7 +2896,7 @@ const Dashboard = () => {
                 
                 <div className="export-actions">
                   <button 
-                    className="primary-btn"
+                    className="secondary-btn"
                     onClick={() => handleExport('csv')}
                   >
                     Export as CSV
@@ -3041,67 +3070,6 @@ const Dashboard = () => {
                 </button>
               </div>
             </form>
-
-            {/* Notification Settings */}
-            <form className="settings-form" onSubmit={(e) => {
-              e.preventDefault();
-              alert('Preferences saved successfully!');
-            }}>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Default Currency</label>
-                  <select 
-                    value={settings.currency}
-                    onChange={(e) => handleSettingsChange('currency', e.target.value)}
-                  >
-                    <option value="BDT">Bangladeshi Taka (৳)</option>
-                    <option value="USD">US Dollar ($)</option>
-                    <option value="EUR">Euro (€)</option>
-                    <option value="GBP">British Pound (£)</option>
-                    <option value="INR">Indian Rupee (₹)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Date Format</label>
-                  <select 
-                    value={settings.dateFormat}
-                    onChange={(e) => handleSettingsChange('dateFormat', e.target.value)}
-                  >
-                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Number Format</label>
-                  <select 
-                    value={settings.numberFormat}
-                    onChange={(e) => handleSettingsChange('numberFormat', e.target.value)}
-                  >
-                    <option value="1,234.56">1,234.56</option>
-                    <option value="1.234,56">1.234,56</option>
-                    <option value="1 234.56">1 234.56</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Dashboard Theme</label>
-                  <select 
-                    value={theme} 
-                    onChange={(e) => setTheme(e.target.value)}
-                  >
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                    <option value="auto">Auto (System)</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-actions">
-                <button type="submit" className="primary-btn">
-                  Save Preferences
-                </button>
-              </div>
-            </form>
-
             {/* Privacy & Security */}
             <div className="card">
               <div className="settings-header">
