@@ -798,7 +798,6 @@ body {
   color: var(--text-muted);
 }
 
-/* Responsive Design */
 @media (max-width: 968px) {
   .hero {
     flex-direction: column;

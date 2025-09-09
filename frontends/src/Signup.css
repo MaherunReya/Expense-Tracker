@@ -373,7 +373,7 @@
   color: var(--text-muted);
 }
 
-/* Responsive Design */
+
 @media (max-width: 968px) {
   .signup-container, .login-container {
     grid-template-columns: 1fr;

@@ -272,8 +272,7 @@ const Signup = () => {
           </div>
         </div>
       </main>
-
-      {/* Footer */}
+      
       <footer className="signup-footer">
         <div className="footer-container">
           <div className="footer-content">
