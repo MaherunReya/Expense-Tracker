@@ -1,5 +1,6 @@
 
 :root {
+  --white: #ffffff
   --bg-primary: rgba(248, 250, 247, 0.95);
   --bg-secondary: rgba(240, 248, 242, 0.9);
   --bg-card: rgba(252, 253, 251, 0.95);
@@ -147,7 +148,7 @@ body {
 
 .sidebar-nav button:hover {
   background: var(--accent-light);
-  color: var(--accent-primary);
+  color: var(--white);
 }
 
 .sidebar-nav button.active {
@@ -404,10 +405,11 @@ th, td {
 }
 
 th {
-  overflow-x: auto;
   background: var(--accent-light);
   color: var(--heading-color);
   font-weight: 600;
+  position: sticky;
+  top: 0;
 }
 
 tr:hover {
@@ -429,6 +431,7 @@ tr:hover {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
+  display: inline-block;
 }
 
 .type-badge.income {
@@ -440,12 +443,64 @@ tr:hover {
   background: rgba(230, 57, 70, 0.1);
   color: var(--expense);
 }
+.receipt-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(74, 144, 226, 0.1);
+  display: inline-block;
+  transition: all 0.2s ease;
+}
 
+.receipt-link:hover {
+  background: rgba(74, 144, 226, 0.2);
+  text-decoration: underline;
+}
 .actions {
   display: flex;
   gap: 8px;
+  flex-wrap: nowrap;
 }
-/* Transaction Form Styles */
+
+.action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-view {
+  background: rgba(74, 144, 226, 0.1);
+  color: var(--primary);
+}
+
+.btn-edit {
+  background: rgba(45, 106, 79, 0.1);
+  color: var(--income);
+}
+
+.btn-delete {
+  background: rgba(230, 57, 70, 0.1);
+  color: var(--expense);
+}
+
+.action-btn:hover {
+  opacity: 0.8;
+  transform: translateY(-1px);
+}
+td {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .card form {
   margin-top: 20px;
 }

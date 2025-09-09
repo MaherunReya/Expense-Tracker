@@ -111,6 +111,17 @@ body {
 .login-btn {
   color: var(--accent-primary) !important;
 }
+.logout-btn{
+  background-color: var(--accent-primary);
+  color: white !important;
+  padding: 8px 16px;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+
+}
+.logout-btn:hover {
+  background-color: var(--accent-secondary);
+}
 
 .signup-btn {
   background-color: var(--accent-primary);
@@ -138,12 +149,6 @@ body {
   background-color: var(--accent-light);
 }
 
-/* Hero Section */
-/* Homepage.css - Enhanced Hero Section */
-
-/* ... (keep previous CSS variables and base styles) ... */
-
-/* Enhanced Hero Section */
 .hero {
   position: relative;
   min-height: 85vh;

@@ -9,12 +9,20 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
   const navigate = useNavigate();
 
   useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    
     localStorage.removeItem("token"); 
     localStorage.removeItem("user");
-  }, []);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -59,14 +67,19 @@ const Login = () => {
       <header className="login-header">
         <div className="header-container">
           <div className="logo">
-            <Link to="/">
-              <h2>Midoru</h2>
-            </Link>
+            <h2>
+              <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+                Midoru
+              </Link>
+            </h2>
           </div>
           <nav className="header-nav">
             <Link to="/">Home</Link>
             <Link to="/about">About</Link>
             <Link to="/contact">Contact</Link>
+            <button className="theme-toggle-btn" onClick={toggleTheme}>
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
           </nav>
         </div>
       </header>
@@ -77,43 +90,51 @@ const Login = () => {
           <div className="login-card">
             <div className="login-header-section">
               <h1>Welcome Back</h1>
-              <p>Sign in to continue your financial journey</p>
+              <p>Log in to continue your financial journey</p>
             </div>
             
             <form onSubmit={handleLogin} className="login-form">
               <div className="form-group">
                 <label htmlFor="email">Email Address</label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  disabled={isLoading}
-                />
+                <div className="input-container">
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
               
               <div className="form-group">
                 <label htmlFor="password">Password</label>
                 <div className="password-input-container">
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    required
-                    disabled={isLoading}
-                  />
-                  <button 
-                    type="button" 
-                    className="password-toggle"
-                    onClick={togglePasswordVisibility}
-                    disabled={isLoading}
-                  >
-                    {showPassword ? "🙈" : "👁️"}
-                  </button>
+                  <div className="input-container">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="password-toggle-container">
+                    <input
+                      type="checkbox"
+                      id="showPassword"
+                      checked={showPassword}
+                      onChange={togglePasswordVisibility}
+                      disabled={isLoading}
+                    />
+                    <label htmlFor="showPassword" className="password-toggle-label">
+                      Show Password
+                    </label>
+                  </div>
                 </div>
               </div>
               
@@ -135,10 +156,10 @@ const Login = () => {
                 {isLoading ? (
                   <>
                     <span className="spinner"></span>
-                    Signing in...
+                    Logging in...
                   </>
                 ) : (
-                  "Sign In"
+                  "Log In"
                 )}
               </button>
             </form>
@@ -149,38 +170,15 @@ const Login = () => {
             
             <div className="social-login">
               <button type="button" className="social-btn google-btn" disabled={isLoading}>
-                <span className="social-icon">🔍</span>
                 Google
               </button>
               <button type="button" className="social-btn github-btn" disabled={isLoading}>
-                <span className="social-icon">💻</span>
                 GitHub
               </button>
             </div>
             
             <div className="signup-link">
               <p>Don't have an account? <Link to="/signup">Sign up now</Link></p>
-            </div>
-          </div>
-          
-          <div className="login-hero">
-            <div className="hero-content">
-              <h2>Take Control of Your Financial Journey</h2>
-              <p>Track expenses, manage budgets, and achieve your financial goals with Midoru</p>
-              <div className="hero-features">
-                <div className="feature">
-                  <span className="feature-icon">💰</span>
-                  <span>Expense Tracking</span>
-                </div>
-                <div className="feature">
-                  <span className="feature-icon">📊</span>
-                  <span>Budget Management</span>
-                </div>
-                <div className="feature">
-                  <span className="feature-icon">📅</span>
-                  <span>Bill Reminders</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>

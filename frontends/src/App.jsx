@@ -10,13 +10,20 @@ const Homepage = () => {
     setIsLoggedIn(!!token);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setIsLoggedIn(false);
+    window.location.href = '/';
+  };
+
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
     
     checkLoginStatus();
     
-    const interval = setInterval(checkLoginStatus, 1000); // Check every second
+    const interval = setInterval(checkLoginStatus, 1000);
     
     return () => clearInterval(interval);
   }, [theme]);
@@ -38,7 +45,10 @@ const Homepage = () => {
             <a href="#testimonials">Testimonials</a>
             <a href="#pricing">Pricing</a>
             {isLoggedIn ? (
-              <a href="/dashboard" className="dashboard-btn">Dashboard</a>
+              <>
+                <a href="/dashboard" className="dashboard-btn">Dashboard</a>
+                <button onClick={handleLogout} className="logout-btn">Logout</button>
+              </>
             ) : (
               <>
                 <a href="/login" className="login-btn">Login</a>
@@ -63,7 +73,7 @@ const Homepage = () => {
         <div className="hero-container">
           <div className="hero-content">
             <div className="hero-badge">
-              <span>✨ Your Financial Freedom Starts Here</span>
+              <span>Your Financial Freedom Starts Here</span>
             </div>
             <h1>
               <span className="text-gradient">Take Control</span> of Your 
@@ -123,7 +133,7 @@ const Homepage = () => {
                 </div>
                 <div className="showcase-stats">
                   <div className="stat-card">
-                    <div className="stat-icon">💰</div>
+                    <div className="stat-icon"></div>
                     <div className="stat-info">
                       <div className="stat-value">$3,240</div>
                       <div className="stat-label">Income</div>
@@ -157,32 +167,32 @@ const Homepage = () => {
           <h2>Powerful Features for Your Finances</h2>
           <div className="features-grid">
             <div className="feature-card">
-              <div className="feature-icon">📊</div>
+              <div className="feature-icon"></div>
               <h3>Expense Tracking</h3>
               <p>Easily track and categorize your expenses with intuitive visualizations.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">💰</div>
+              <div className="feature-icon"></div>
               <h3>Budget Management</h3>
               <p>Set budgets and receive alerts when you're approaching your limits.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">📅</div>
+              <div className="feature-icon"></div>
               <h3>Bill Reminders</h3>
               <p>Never miss a payment with smart bill reminders and tracking.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">📈</div>
+              <div className="feature-icon"></div>
               <h3>Financial Reports</h3>
               <p>Generate detailed reports to understand your spending patterns.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">💳</div>
+              <div className="feature-icon"></div>
               <h3>Debt Tracking</h3>
               <p>Monitor your debts and create payoff plans to become debt-free.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">🔒</div>
+              <div className="feature-icon"></div>
               <h3>Secure & Private</h3>
               <p>Your financial data is encrypted and never shared with third parties.</p>
             </div>

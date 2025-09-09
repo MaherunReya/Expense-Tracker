@@ -1132,7 +1132,7 @@ const Dashboard = () => {
             >
               Dashboard
             </button>
-                        <button 
+            <button 
               className={activePage === 'bill' ? 'active' : ''} 
               onClick={() => setActivePage('bill')}
             >
@@ -1187,6 +1187,14 @@ const Dashboard = () => {
               Settings
             </button>
             <button 
+              onClick={() => {
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+              }}
+            >
+              Logout
+            </button>
+            <button 
               className="theme-toggle-btn"
               onClick={toggleTheme}
               title="Toggle theme"
@@ -1232,7 +1240,7 @@ const Dashboard = () => {
             {/* Budget alerts */}
             {budgetAlerts.length > 0 && (
               <div className="budget-alerts-container">
-                <h2>🚨 Budget Alerts</h2>
+                <h2>Budget Alerts</h2>
                 <div className="alerts-grid">
                   {budgetAlerts.map((alert, index) => (
                     <div key={index} className={`alert-card ${alert.type}`}>
@@ -1243,13 +1251,15 @@ const Dashboard = () => {
                         <h4>{alert.category}</h4>
                       </div>
                       <div className="alert-details">
-                        <p>Spent: {formatCurrency(alert.spent)} of {formatCurrency(alert.limit)}</p>                        <p className="alert-percentage">{alert.percentage}% used</p>
-                        {alert.type === 'over' && (
-                        <p className="over-budget">Over budget by {formatCurrency(alert.spent - alert.limit)}</p>                        )}
+                        <p>Spent: {formatCurrency(alert.spent)} of {formatCurrency(alert.limit)}</p>                        
+                        <p className="alert-percentage">{alert.percentage}% used</p>
+                          {alert.type === 'over' && (
+                            <p className="over-budget">Over budget by {formatCurrency(alert.spent - alert.limit)}</p>
+                          )}
                       </div>
                       <div className="progress-bar">
                         <div 
-                          className={`progress-fill {formatCurrency(alert.type)}`}
+                          className={`progress-fill ${alert.type}`}
                           style={{ width: `${Math.min(alert.percentage, 100)}%` }}
                         ></div>
                       </div>
@@ -1265,14 +1275,15 @@ const Dashboard = () => {
                 <h2>Bill Reminders</h2>
                 <div className="alerts-grid">
                   {billAlerts.map((bill, index) => (
-                      <div key={index} className={`bill-alert-card ${bill.isOverdue ? 'overdue' : 'upcoming'}`}>                      <div className="bill-alert-header">
+                      <div key={index} className={`bill-alert-card ${bill.isOverdue ? 'overdue' : 'upcoming'}`}>                      
+                      <div className="bill-alert-header">
                         <span className="bill-alert-icon">
                           {bill.isOverdue ? '🚨' : '⏰'}
                         </span>
                         <h4>{bill.name}</h4>
                       </div>
                       <div className="bill-alert-details">
-                        <p className="bill-amount">${bill.amount.toFixed(2)}</p>
+                        <p className="bill-amount">{formatCurrency(bill.amount)}</p>
                         <p className="bill-category">{bill.category}</p>
                         <p className={`bill-status ${bill.isOverdue ? 'overdue' : 'upcoming'}`}>
                           {bill.isOverdue 
@@ -1373,7 +1384,7 @@ const Dashboard = () => {
                     {transactions.slice(0, 5).map((txn) => (
                       <tr key={txn._id}>
                         <td>{txn.title}</td>
-                        <td className={txn.type}>${txn.amount}</td>
+                        <td className={txn.type}>{formatCurrency(txn.amount)}</td> 
                         <td>
                           <span className={`type-badge ${txn.type}`}>
                             {txn.type}
@@ -1428,8 +1439,8 @@ const Dashboard = () => {
                         
                         <div className="budget-progress">
                           <div className="budget-amounts">
-                            <span>${spent.toFixed(2)} / ${budget.monthlyLimit.toFixed(2)}</span>
-                            <span className={`percentage ${percentage >= 100 ? 'over' : percentage >= budget.alertThreshold ? 'warning' : 'safe'}`}>
+                              <span>{formatCurrency(spent)} / {formatCurrency(budget.monthlyLimit)}</span>                           
+                              <span className={`percentage ${percentage >= 100 ? 'over' : percentage >= budget.alertThreshold ? 'warning' : 'safe'}`}>
                               {percentage.toFixed(1)}%
                             </span>
                           </div>
@@ -1491,8 +1502,7 @@ const Dashboard = () => {
                         </div>
                         
                         <div className="bill-details">
-                          <div className="bill-amount">${bill.amount.toFixed(2)}</div>
-                          
+                         <div className="bill-amount">{formatCurrency(bill.amount)}</div>
                           <div className="bill-due-date">
                             <span className="due-label">Next due:</span>
                             <span className={`due-date ${isOverdue ? 'overdue' : isDueSoon ? 'due-soon' : ''}`}>
@@ -1555,14 +1565,13 @@ const Dashboard = () => {
                         </div>
                         
                         <div className="debt-details">
-                          <div className="debt-balance">${debt.currentBalance.toFixed(2)}</div>
-                          <div className="debt-original">of ${debt.totalAmount.toFixed(2)}</div>
-                          
+                        <div className="debt-balance">{formatCurrency(debt.currentBalance)}</div>
+                        <div className="debt-original">of {formatCurrency(debt.totalAmount)}</div>                        
                           <div className="debt-progress">
                             <div className="progress-bar">
                               <div 
                                 className="progress-fill paid"
-                                style={{ width: `৳{payoffPercentage}%` }}
+                                style={{ width: `${payoffPercentage}%` }}
                               ></div>
                             </div>
                             <span className="progress-text">{payoffPercentage.toFixed(1)}% paid off</span>
@@ -1628,8 +1637,8 @@ const Dashboard = () => {
                     {Object.entries(categorySummary).slice(0, 5).map(([title, values]) => (
                       <tr key={title}>
                         <td>{title}</td>
-                        <td className="income"><p>৳{totalIncome.toFixed(2)}</p>{values.income.toFixed(2)}</td>
-                        <td className="expense"><p>৳{totalIncome.toFixed(2)}</p>{values.expense.toFixed(2)}</td>
+                        <td className="income"><p>{formatCurrency(totalIncome)}</p>{formatCurrency(values.income)}</td>
+                        <td className="expense"><p>{formatCurrency(totalIncome)}</p>{formatCurrency(values.expense)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1676,10 +1685,10 @@ const Dashboard = () => {
                       {Object.entries(monthlySummary).slice(0, 3).map(([month, values]) => (
                         <tr key={month}>
                           <td>{new Date(`${month}-01`).toLocaleString('default', { month: 'long' })}</td>
-                          <td className="income">${values.income.toFixed(2)}</td>
-                          <td className="expense">${values.expense.toFixed(2)}</td>
-                          <td>${(values.income - values.expense).toFixed(2)}</td>
-                        </tr>
+                          <td className="income">{formatCurrency(values.income)}</td>
+                          <td className="expense">{formatCurrency(values.expense)}</td>
+                          <td>{formatCurrency(values.income - values.expense)}</td>
+                          </tr>
                       ))}
                     </tbody>
                   </table>
@@ -1703,10 +1712,9 @@ const Dashboard = () => {
                       {Object.entries(yearlySummary).slice(0, 2).map(([year, values]) => (
                         <tr key={year}>
                           <td>{year}</td>
-                          <td className="income">${values.income.toFixed(2)}</td>
-                          <td className="expense">${values.expense.toFixed(2)}</td>
-                          <td>${(values.income - values.expense).toFixed(2)}</td>
-                        </tr>
+                          <td className="income">{formatCurrency(values.income)}</td>
+                          <td className="expense">{formatCurrency(values.expense)}</td>
+                          <td>{formatCurrency(values.income - values.expense)}</td>                        </tr>
                       ))}
                     </tbody>
                   </table>
@@ -1946,8 +1954,7 @@ const Dashboard = () => {
                           </div>
                           
                           <div className="bill-details">
-                            <div className="bill-amount">${bill.amount.toFixed(2)}</div>
-                            {bill.category && (
+                          <div className="bill-amount">{formatCurrency(bill.amount)}</div>                            {bill.category && (
                               <div className="bill-category">{bill.category}</div>
                             )}
                             
@@ -2015,7 +2022,7 @@ const Dashboard = () => {
 
             {budgetAlerts.length > 0 && (
               <div className="budget-alerts-container">
-                <h2>🚨 Budget Alerts</h2>
+                <h2>Budget Alerts</h2>
                 <div className="alerts-grid">
                   {budgetAlerts.map((alert, index) => (
                     <div key={index} className={`alert-card ${alert.type}`}>
@@ -2026,11 +2033,11 @@ const Dashboard = () => {
                         <h4>{alert.category}</h4>
                       </div>
                       <div className="alert-details">
-                        <p>Spent: ${alert.spent.toFixed(2)} of ${alert.limit.toFixed(2)}</p>
+                        <p>Spent: {formatCurrency(alert.spent)} of {formatCurrency(alert.limit)}</p>                        
                         <p className="alert-percentage">{alert.percentage}% used</p>
-                        {alert.type === 'over' && (
-                          <p className="over-budget">Over budget by ${(alert.spent - alert.limit).toFixed(2)}</p>
-                        )}
+                          {alert.type === 'over' && (
+                            <p className="over-budget">Over budget by {formatCurrency(alert.spent - alert.limit)}</p>
+                          )}
                       </div>
                       <div className="progress-bar">
                         <div 
@@ -2074,7 +2081,7 @@ const Dashboard = () => {
                       type="number"
                       name="monthlyLimit"
                       value={budgetFormData.monthlyLimit}
-                      placeholder="Monthly Limit ($)"
+                      placeholder="Monthly Limit "
                       onChange={handleBudgetFormChange}
                       required
                       step="0.01"
@@ -2121,8 +2128,8 @@ const Dashboard = () => {
                           
                           <div className="budget-progress">
                             <div className="budget-amounts">
-                              <span>${spent.toFixed(2)} / ${budget.monthlyLimit.toFixed(2)}</span>
-                              <span className={`percentage ${percentage >= 100 ? 'over' : percentage >= budget.alertThreshold ? 'warning' : 'safe'}`}>
+                                <span> {formatCurrency(spent)} / {formatCurrency(budget.monthlyLimit)}</span>                              
+                                <span className={`percentage ${percentage >= 100 ? 'over' : percentage >= budget.alertThreshold ? 'warning' : 'safe'}`}>
                                 {percentage.toFixed(1)}%
                               </span>
                             </div>
@@ -2248,7 +2255,7 @@ const Dashboard = () => {
                     {transactions.map((txn) => (
                       <tr key={txn._id}>
                         <td>{txn.title}</td>
-                        <td className={txn.type}>${txn.amount}</td>
+                        <td className={txn.type}>{formatCurrency(txn.amount)}</td>                        
                         <td>
                           <span className={`type-badge ${txn.type}`}>
                             {txn.type}
@@ -2625,99 +2632,99 @@ const Dashboard = () => {
         )}
 
         {activePage === 'tax' && (
-  <>
-    <div className="dashboard-header">
-      <h1>Tax Estimation Tool</h1>
-      <p>Calculate your income tax based on Bangladesh tax laws</p>
-    </div>
+            <>
+            <div className="dashboard-header">
+              <h1>Tax Estimation Tool</h1>
+              <p>Calculate your income tax based on Bangladesh tax laws</p>
+            </div>
 
-    <div className="card tax-calculator">
-      <div className="tax-header">
-        <h2>Income Tax Calculator</h2>
-        <button 
-          className="primary-btn"
-          onClick={() => setShowTaxForm(!showTaxForm)}
-        >
-          {showTaxForm ? 'Cancel' : 'New Calculation'}
-        </button>
-      </div>
+            <div className="card tax-calculator">
+              <div className="tax-header">
+                <h2>Income Tax Calculator</h2>
+                <button 
+                  className="primary-btn"
+                  onClick={() => setShowTaxForm(!showTaxForm)}
+                >
+                  {showTaxForm ? 'Cancel' : 'New Calculation'}
+                </button>
+              </div>
 
-      {showTaxForm && (
-        <div className="tax-form">
-          <div className="form-grid">
-            <div className="form-group">
-              <label>Total Annual Income *</label>
-              <input
-                type="number"
-                name="totalIncome"
-                value={taxFormData.totalIncome}
-                placeholder="Enter your total income"
-                onChange={handleTaxFormChange}
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label>Tax Year</label>
-              <input
-                type="text"
-                name="taxYear"
-                value={taxFormData.taxYear}
-                onChange={handleTaxFormChange}
-              />
-            </div>
-            
-            <div className="form-group">
-              <label>Basic Exemption</label>
-              <select name="basicExemption" value={taxFormData.basicExemption} onChange={handleTaxFormChange}>
-                <option value="350000">General Taxpayer (3.5 Lac)</option>
-                <option value="400000">Female/Senior Citizen (4 Lac)</option>
-                <option value="475000">Disabled Person (4.75 Lac)</option>
-                <option value="400000">Gazetted War Veteran (4 Lac)</option>
-              </select>
-            </div>
-            
-            <div className="form-group">
-              <label>Investment Allowance</label>
-              <input
-                type="number"
-                name="investment"
-                value={taxFormData.investment}
-                placeholder="Max 25% of income or 15 Lac"
-                onChange={handleTaxFormChange}
-              />
-            </div>
-            
-            <div className="form-group">
-              <label>Donation Allowance</label>
-              <input
-                type="number"
-                name="donation"
-                value={taxFormData.donation}
-                placeholder="Charitable donations"
-                onChange={handleTaxFormChange}
-              />
-            </div>
-            
-            <div className="form-group">
-              <label>Other Allowances</label>
-              <input
-                type="number"
-                name="other"
-                value={taxFormData.other}
-                placeholder="Other deductible allowances"
-                onChange={handleTaxFormChange}
-              />
-            </div>
-          </div>
-          
-          <div className="form-actions">
-            <button type="button" className="primary-btn" onClick={calculateTax}>
-              Calculate Tax
-            </button>
-          </div>
-        </div>
-      )}
+              {showTaxForm && (
+                <div className="tax-form">
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Total Annual Income *</label>
+                      <input
+                        type="number"
+                        name="totalIncome"
+                        value={taxFormData.totalIncome}
+                        placeholder="Enter your total income"
+                        onChange={handleTaxFormChange}
+                        required
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Tax Year</label>
+                      <input
+                        type="text"
+                        name="taxYear"
+                        value={taxFormData.taxYear}
+                        onChange={handleTaxFormChange}
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Basic Exemption</label>
+                      <select name="basicExemption" value={taxFormData.basicExemption} onChange={handleTaxFormChange}>
+                        <option value="350000">General Taxpayer (3.5 Lac)</option>
+                        <option value="400000">Female/Senior Citizen (4 Lac)</option>
+                        <option value="475000">Disabled Person (4.75 Lac)</option>
+                        <option value="400000">Gazetted War Veteran (4 Lac)</option>
+                      </select>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Investment Allowance</label>
+                      <input
+                        type="number"
+                        name="investment"
+                        value={taxFormData.investment}
+                        placeholder="Max 25% of income or 15 Lac"
+                        onChange={handleTaxFormChange}
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Donation Allowance</label>
+                      <input
+                        type="number"
+                        name="donation"
+                        value={taxFormData.donation}
+                        placeholder="Charitable donations"
+                        onChange={handleTaxFormChange}
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Other Allowances</label>
+                      <input
+                        type="number"
+                        name="other"
+                        value={taxFormData.other}
+                        placeholder="Other deductible allowances"
+                        onChange={handleTaxFormChange}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="form-actions">
+                    <button type="button" className="primary-btn" onClick={calculateTax}>
+                      Calculate Tax
+                    </button>
+                  </div>
+                </div>
+          )}
 
       {taxResult && (
           <div className="tax-result">
@@ -2934,7 +2941,7 @@ const Dashboard = () => {
           </>
         )}
 
-{activePage === 'settings' && (
+        {activePage === 'settings' && (
           <>
             <div className="dashboard-header">
               <h1>Settings</h1>

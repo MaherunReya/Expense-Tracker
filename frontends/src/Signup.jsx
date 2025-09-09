@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom'; 
 import { jwtDecode } from 'jwt-decode';
 import './Signup.css';
@@ -13,8 +13,18 @@ const Signup = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
 
   const navigate = useNavigate(); 
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
@@ -49,8 +59,6 @@ const Signup = () => {
         setIsLoading(false);
         return;
       }
-
-      // Try to parse the response as JSON
       let data;
       try {
         data = JSON.parse(responseText);
@@ -62,11 +70,8 @@ const Signup = () => {
       
       console.log('Signup successful:', data);
       if (data.token) {
-        // Clear any existing auth data
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-
-        // Store new auth data
         localStorage.setItem('token', data.token);
 
         const decoded = jwtDecode(data.token);
@@ -82,19 +87,24 @@ const Signup = () => {
   };
 
   return (
-    <div className="signup-page">
+    <div className="login-page">
       {/* Header */}
-      <header className="signup-header">
+      <header className="login-header">
         <div className="header-container">
           <div className="logo">
-            <Link to="/">
-              <h2>Midoru</h2>
-            </Link>
+            <h2>
+              <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+                Midoru
+              </Link>
+            </h2>
           </div>
           <nav className="header-nav">
             <Link to="/">Home</Link>
             <Link to="/about">About</Link>
             <Link to="/contact">Contact</Link>
+            <button className="theme-toggle-btn" onClick={toggleTheme}>
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
           </nav>
         </div>
       </header>
@@ -110,16 +120,14 @@ const Signup = () => {
             
             {error && (
               <div className="error-message">
-                <i className="fas fa-exclamation-circle"></i>
-                <span>{error}</span>
+                <span>⚠️ {error}</span>
               </div>
             )}
             
             <form onSubmit={handleSignup} className="signup-form">
               <div className="form-group">
                 <label htmlFor="name">Full Name</label>
-                <div className="input-icon">
-                  <i className="fas fa-user"></i>
+                <div className="input-container">
                   <input
                     id="name"
                     type="text"
@@ -134,8 +142,7 @@ const Signup = () => {
               
               <div className="form-group">
                 <label htmlFor="age">Age</label>
-                <div className="input-icon">
-                  <i className="fas fa-birthday-cake"></i>
+                <div className="input-container">
                   <input
                     id="age"
                     type="number"
@@ -152,8 +159,7 @@ const Signup = () => {
               
               <div className="form-group">
                 <label htmlFor="email">Email Address</label>
-                <div className="input-icon">
-                  <i className="fas fa-envelope"></i>
+                <div className="input-container">
                   <input
                     id="email"
                     type="email"
@@ -169,8 +175,7 @@ const Signup = () => {
               <div className="form-group">
                 <label htmlFor="password">Password</label>
                 <div className="password-input-container">
-                  <div className="input-icon">
-                    <i className="fas fa-lock"></i>
+                  <div className="input-container">
                     <input
                       id="password"
                       type={showPassword ? "text" : "password"}
@@ -181,22 +186,25 @@ const Signup = () => {
                       disabled={isLoading}
                     />
                   </div>
-                  <button 
-                    type="button" 
-                    className="password-toggle"
-                    onClick={togglePasswordVisibility}
-                    disabled={isLoading}
-                  >
-                    {showPassword ? "🙈" : "👁️"}
-                  </button>
+                  <div className="password-toggle-container">
+                    <input
+                      type="checkbox"
+                      id="showPassword"
+                      checked={showPassword}
+                      onChange={togglePasswordVisibility}
+                      disabled={isLoading}
+                    />
+                    <label htmlFor="showPassword" className="password-toggle-label">
+                      Show Password
+                    </label>
+                  </div>
                 </div>
               </div>
               
               <div className="form-group">
                 <label htmlFor="confirmPassword">Confirm Password</label>
                 <div className="password-input-container">
-                  <div className="input-icon">
-                    <i className="fas fa-lock"></i>
+                  <div className="input-container">
                     <input
                       id="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
@@ -207,14 +215,18 @@ const Signup = () => {
                       disabled={isLoading}
                     />
                   </div>
-                  <button 
-                    type="button" 
-                    className="password-toggle"
-                    onClick={toggleConfirmPasswordVisibility}
-                    disabled={isLoading}
-                  >
-                    {showConfirmPassword ? "🙈" : "👁️"}
-                  </button>
+                  <div className="password-toggle-container">
+                    <input
+                      type="checkbox"
+                      id="showConfirmPassword"
+                      checked={showConfirmPassword}
+                      onChange={toggleConfirmPasswordVisibility}
+                      disabled={isLoading}
+                    />
+                    <label htmlFor="showConfirmPassword" className="password-toggle-label">
+                      Show Password
+                    </label>
+                  </div>
                 </div>
               </div>
               
@@ -247,42 +259,15 @@ const Signup = () => {
             
             <div className="social-signup">
               <button type="button" className="social-btn google-btn" disabled={isLoading}>
-                <span className="social-icon">🔍</span>
                 Google
               </button>
               <button type="button" className="social-btn github-btn" disabled={isLoading}>
-                <span className="social-icon">💻</span>
                 GitHub
               </button>
             </div>
             
             <div className="login-link">
               <p>Already have an account? <Link to="/login">Log in now</Link></p>
-            </div>
-          </div>
-          
-          <div className="signup-hero">
-            <div className="hero-content">
-              <h2>Start Your Financial Journey</h2>
-              <p>Track expenses, manage budgets, and achieve your financial goals with Midoru</p>
-              <div className="hero-features">
-                <div className="feature">
-                  <span className="feature-icon">💰</span>
-                  <span>Expense Tracking</span>
-                </div>
-                <div className="feature">
-                  <span className="feature-icon">📊</span>
-                  <span>Budget Management</span>
-                </div>
-                <div className="feature">
-                  <span className="feature-icon">📅</span>
-                  <span>Bill Reminders</span>
-                </div>
-                <div className="feature">
-                  <span className="feature-icon">📈</span>
-                  <span>Financial Reports</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
