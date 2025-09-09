@@ -5,6 +5,9 @@ import cors from "cors"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken";
 import PDFDocument from 'pdfkit';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 const SECRET_KEY = process.env.JWT_SECRET || "yourSecretKey";
@@ -129,21 +132,31 @@ const transactionSchema = new mongoose.Schema({
   amount: Number,
   type: { type: String, enum: ["income", "expense"] },
   category: String,
-  date: { type: Date, default: Date.now },
+  date: { type: Date, default: Date.now, required: true },
+  receipt: {
+    filename: String,
+    originalName: String,
+    path: String,
+    size: Number,
+    uploadDate: { type: Date, default: Date.now }
+  }
 });
-
 
 const TransactionModel = mongoose.model("transactions", transactionSchema);
 
 app.post("/transactions", auth, async (req, res) => {
   try {
-    const newTransaction = new TransactionModel({
+    const transactionData = {
       ...req.body,
-      userId: req.userId
-    });
+      userId: req.userId,
+      date: req.body.date || new Date() 
+    };
+    
+    const newTransaction = new TransactionModel(transactionData);
     await newTransaction.save();
     res.status(201).json({ message: "Transaction added", transaction: newTransaction });
   } catch (error) {
+    console.error('Transaction creation error:', error);
     res.status(500).json({ error: "Failed to add transaction" });
   }
 });
@@ -152,8 +165,17 @@ app.post("/transactions", auth, async (req, res) => {
 app.get("/transactions", auth, async (req, res) => {
   try {
     const transactions = await TransactionModel.find({ userId: req.userId });
-    res.status(200).json(transactions);
+    const preferences = await UserPreferencesModel.findOne({ userId: req.userId });
+    const currency = preferences?.currency || 'BDT';
+    
+    const transactionsWithCurrency = transactions.map(transaction => ({
+      ...transaction.toObject(),
+      currencySymbol: currency === 'BDT' ? '৳' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'INR' ? '₹' : currency
+    }));
+    
+    res.status(200).json(transactionsWithCurrency);
   } catch (error) {
+    console.error('Fetch transactions error:', error);
     res.status(500).json({ error: "Failed to fetch transactions" });
   }
 });
@@ -499,8 +521,8 @@ app.get("/transactions/export/csv", auth, async (req, res) => {
     
     let csvContent = 'Date,Title,Amount,Type,Category\n';
     transactions.forEach(txn => {
-      const dateObj = new Date(txn.date);
-      const formattedDate = dateObj.toISOString().split('T')[0];
+      const dateObj = txn.date ? new Date(txn.date) : new Date();
+      const formattedDate = !isNaN(dateObj) ? dateObj.toISOString().split('T')[0] : 'N/A';
 
       const title = `"${(txn.title || 'Untitled').replace(/"/g, '""')}"`;
       const category = `"${(txn.category || 'Uncategorized').replace(/"/g, '""')}"`;
@@ -513,7 +535,6 @@ app.get("/transactions/export/csv", auth, async (req, res) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="transactions.csv"');
     res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Access-Control-Allow-Origin', '*');
     
     res.send(csvContent);
   } catch (error) {
@@ -543,55 +564,34 @@ app.get("/transactions/export/pdf", auth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Set headers before creating PDF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="transactions.pdf"');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
+    
     const doc = new PDFDocument({ margin: 50 });
-
+    
+    // Handle PDF errors
     doc.on('error', (err) => {
       console.error('PDF generation error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "PDF generation failed" });
+      }
     });
 
+    // Pipe the PDF directly to response
     doc.pipe(res);
 
+    // Add content
     doc.fontSize(20).text('Financial Transactions Report', 50, 50);
     doc.fontSize(12);
     doc.text(`Generated for: ${user.name || 'Unknown User'}`, 50, 80);
     doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 50, 95);
 
-    let filterY = 110;
-    if (startDate || endDate) {
-      doc.text(`Date Range: ${startDate || 'All'} to ${endDate || 'All'}`, 50, filterY);
-      filterY += 15;
-    }
-    if (type) {
-      doc.text(`Type Filter: ${type}`, 50, filterY);
-      filterY += 15;
-    }
-    if (category) {
-      doc.text(`Category Filter: ${category}`, 50, filterY);
-      filterY += 15;
-    }
-
-    const totalIncome = transactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-    const totalExpense = transactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-    
-    let summaryY = filterY + 10;
-    doc.fontSize(14).text('Summary:', 50, summaryY);
-    doc.fontSize(12);
-    doc.text(`Total Income: $${totalIncome.toFixed(2)}`, 50, summaryY + 20);
-    doc.text(`Total Expenses: $${totalExpense.toFixed(2)}`, 50, summaryY + 35);
-    doc.text(`Net Balance: $${(totalIncome - totalExpense).toFixed(2)}`, 50, summaryY + 50);
-
+    // Add transactions table
     if (transactions.length > 0) {
-      let yPosition = summaryY + 80;
+      let yPosition = 140;
 
+      // Table headers
       doc.fontSize(10).fillColor('black');
       doc.text('Date', 50, yPosition);
       doc.text('Title', 120, yPosition);
@@ -606,17 +606,12 @@ app.get("/transactions/export/pdf", auth, async (req, res) => {
         if (yPosition > 720) {
           doc.addPage();
           yPosition = 50;
-          doc.fontSize(10);
-          doc.text('Date', 50, yPosition);
-          doc.text('Title', 120, yPosition);
-          doc.text('Amount', 320, yPosition);
-          doc.text('Type', 380, yPosition);
-          doc.text('Category', 430, yPosition);
-          doc.moveTo(50, yPosition + 15).lineTo(550, yPosition + 15).stroke();
-          yPosition += 25;
         }
         
-        const date = new Date(txn.date).toLocaleDateString() || 'N/A';
+        // Fix date formatting here too
+        const dateObj = txn.date ? new Date(txn.date) : new Date();
+        const date = !isNaN(dateObj) ? dateObj.toLocaleDateString() : 'N/A';
+        
         const title = (txn.title || 'Untitled').substring(0, 30);
         const amount = Number(txn.amount) || 0;
         const type = txn.type || 'N/A';
@@ -631,8 +626,10 @@ app.get("/transactions/export/pdf", auth, async (req, res) => {
         yPosition += 15;
       });
     } else {
-      doc.fontSize(12).text('No transactions found for the selected criteria.', 50, summaryY + 80);
+      doc.fontSize(12).text('No transactions found for the selected criteria.', 50, 140);
     }
+
+    // Finalize the PDF
     doc.end();
     
   } catch (error) {
@@ -643,3 +640,543 @@ app.get("/transactions/export/pdf", auth, async (req, res) => {
   }
 });
 
+// Tax estimation schema
+const taxEstimationSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'users', required: true },
+  taxYear: String,
+  totalIncome: Number,
+  taxableIncome: Number,
+  totalTax: Number,
+  exemptions: {
+    basic: Number,
+    investment: Number,
+    donation: Number,
+    disability: Number,
+    other: Number
+  },
+  taxBreakdown: [{
+    slabRate: Number,
+    slabIncome: Number,
+    taxAmount: Number
+  }],
+  createdAt: { type: Date, default: Date.now }
+});
+
+const TaxEstimationModel = mongoose.model("taxestimations", taxEstimationSchema);
+
+// Bangladesh tax calculation function
+const calculateBangladeshTax = (totalIncome, exemptions = {}) => {
+  const income = Number(totalIncome) || 0;
+  
+  const {
+    basic = 350000,
+    investment = 0,
+    donation = 0,
+    disability = 0,
+    other = 0
+  } = exemptions;
+
+  const totalExemption = Number(basic) + Number(investment) + Number(donation) + Number(disability) + Number(other);
+  const taxableIncome = Math.max(0, income - totalExemption);
+
+  // Tax slabs for FY 2023-24
+  const taxSlabs = [
+    { min: 0, max: 350000, rate: 0 },
+    { min: 350000, max: 450000, rate: 5 },
+    { min: 450000, max: 750000, rate: 10 },
+    { min: 750000, max: 1150000, rate: 15 },
+    { min: 1150000, max: 1650000, rate: 20 },
+    { min: 1650000, max: Infinity, rate: 25 }
+  ];
+
+  let totalTax = 0;
+  let taxBreakdown = [];
+  let remainingIncome = taxableIncome;
+
+  for (let slab of taxSlabs) {
+    if (remainingIncome <= 0) break;
+    
+    const slabIncome = Math.min(remainingIncome, slab.max - slab.min);
+    const taxAmount = slabIncome * (slab.rate / 100);
+    
+    if (taxAmount > 0) {
+      taxBreakdown.push({
+        slabRate: slab.rate,
+        slabIncome: slabIncome,
+        taxAmount: taxAmount
+      });
+    }
+    
+    totalTax += taxAmount;
+    remainingIncome -= slabIncome;
+  }
+
+  return {
+    totalIncome: income,
+    taxableIncome: taxableIncome,
+    totalTax: totalTax,
+    exemptions: {
+      basic: Number(basic),
+      investment: Number(investment),
+      donation: Number(donation),
+      disability: Number(disability),
+      other: Number(other)
+    },
+    taxBreakdown: taxBreakdown
+  };
+};
+
+// Tax estimation routes
+app.post("/tax-estimation", auth, async (req, res) => {
+  try {
+    const { totalIncome, exemptions, taxYear } = req.body;
+    
+    const calculation = calculateBangladeshTax(totalIncome, exemptions);
+    
+    const newEstimation = new TaxEstimationModel({
+      userId: req.userId,
+      taxYear: taxYear || new Date().getFullYear().toString(),
+      ...calculation
+    });
+    
+    await newEstimation.save();
+    res.status(201).json({ message: "Tax estimation saved", estimation: newEstimation });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to calculate tax estimation" });
+  }
+});
+
+app.get("/tax-estimation", auth, async (req, res) => {
+  try {
+    const estimations = await TaxEstimationModel.find({ userId: req.userId }).sort({ createdAt: -1 });
+    res.status(200).json(estimations);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch tax estimations" });
+  }
+});
+
+app.get("/tax-estimation/calculate", auth, async (req, res) => {
+  try {
+    const { totalIncome, basicExemption, investment, donation, disability, other } = req.query;
+    
+    const exemptions = {
+      basic: Number(basicExemption) || 350000,
+      investment: Number(investment) || 0,
+      donation: Number(donation) || 0,
+      disability: Number(disability) || 0,
+      other: Number(other) || 0
+    };
+    
+    const calculation = calculateBangladeshTax(Number(totalIncome), exemptions);
+    res.status(200).json(calculation);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to calculate tax" });
+  }
+}); 
+
+const uploadDir = 'uploads/receipts';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `receipt-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, 
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|pdf/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (extname && mimetype) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files and PDFs are allowed'));
+    }
+  }
+});
+
+// Serve static files
+app.use('/uploads', express.static('uploads'));
+
+// Upload receipt with transaction
+app.post("/transactions/with-receipt", auth, upload.single('receipt'), async (req, res) => {
+  try {
+    const transactionData = {
+      ...req.body,
+      userId: req.userId
+    };
+
+    if (req.file) {
+      transactionData.receipt = {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        path: req.file.path,
+        size: req.file.size
+      };
+    }
+
+    const newTransaction = new TransactionModel(transactionData);
+    await newTransaction.save();
+    res.status(201).json({ message: "Transaction with receipt added", transaction: newTransaction });
+  } catch (error) {
+    // Clean up uploaded file if transaction creation fails
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: "Failed to add transaction with receipt" });
+  }
+});
+
+// Add receipt to existing transaction
+app.post("/transactions/:id/receipt", auth, upload.single('receipt'), async (req, res) => {
+  try {
+    const transaction = await TransactionModel.findById(req.params.id);
+    
+    if (!transaction || transaction.userId.toString() !== req.userId) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    // Delete old receipt if exists
+    if (transaction.receipt && transaction.receipt.path) {
+      if (fs.existsSync(transaction.receipt.path)) {
+        fs.unlinkSync(transaction.receipt.path);
+      }
+    }
+
+    transaction.receipt = {
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      path: req.file.path,
+      size: req.file.size,
+      uploadDate: new Date()
+    };
+
+    await transaction.save();
+    res.status(200).json({ message: "Receipt uploaded", transaction });
+  } catch (error) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: "Failed to upload receipt" });
+  }
+});
+
+// Delete receipt
+app.delete("/transactions/:id/receipt", auth, async (req, res) => {
+  try {
+    const transaction = await TransactionModel.findById(req.params.id);
+    
+    if (!transaction || transaction.userId.toString() !== req.userId) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    if (transaction.receipt && transaction.receipt.path) {
+      if (fs.existsSync(transaction.receipt.path)) {
+        fs.unlinkSync(transaction.receipt.path);
+      }
+      transaction.receipt = undefined;
+      await transaction.save();
+    }
+
+    res.status(200).json({ message: "Receipt deleted" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete receipt" });
+  }
+});
+
+
+// User preference and settings part
+const userPreferencesSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'users', required: true, unique: true },
+  currency: { type: String, default: 'BDT' },
+  dateFormat: { type: String, default: 'DD/MM/YYYY' },
+  numberFormat: { type: String, default: '1,234.56' },
+  theme: { type: String, default: 'light' },
+  notifications: {
+    budgetAlerts: { type: Boolean, default: true },
+    billReminders: { type: Boolean, default: true },
+    monthlyReports: { type: Boolean, default: true },
+    emailNotifications: { type: Boolean, default: false }
+  },
+  autoLogout: { type: Number, default: 30 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const UserPreferencesModel = mongoose.model("userpreferences", userPreferencesSchema);
+
+const customCategorySchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'users', required: true },
+  name: { type: String, required: true },
+  type: { type: String, enum: ['income', 'expense', 'both'], default: 'expense' },
+  color: { type: String, default: '#007bff' },
+  icon: { type: String, default: '💰' },
+  isDefault: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const CustomCategoryModel = mongoose.model("customcategories", customCategorySchema);
+app.get("/user/preferences", auth, async (req, res) => {
+  try {
+    let preferences = await UserPreferencesModel.findOne({ userId: req.userId });
+    
+    if (!preferences) {
+      preferences = new UserPreferencesModel({ 
+        userId: req.userId,
+        currency: 'BDT' 
+      });
+      await preferences.save();
+    }
+    
+    res.status(200).json(preferences);
+  } catch (error) {
+    console.error('Get preferences error:', error);
+    res.status(500).json({ error: "Failed to fetch preferences" });
+  }
+});
+app.put("/user/preferences", auth, async (req, res) => {
+  try {
+    const updatedPreferences = await UserPreferencesModel.findOneAndUpdate(
+      { userId: req.userId },
+      { 
+        ...req.body, 
+        updatedAt: new Date() 
+      },
+      { new: true, upsert: true }
+    );
+    
+    res.status(200).json({ 
+      message: "Preferences updated successfully", 
+      preferences: updatedPreferences 
+    });
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ error: "Failed to update preferences" });
+  }
+});
+app.put("/user/profile", auth, async (req, res) => {
+  try {
+    const { name } = req.body;
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: "Name is required" });
+    }
+    
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      req.userId,
+      { name: name.trim() },
+      { new: true }
+    );
+    
+    if (!updatedUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+  const { password, ...userWithoutPassword } = updatedUser.toObject();
+    res.status(200).json({ 
+      message: "Profile updated successfully", 
+      user: userWithoutPassword 
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+app.put("/user/password", auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Both current and new passwords are required" });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters long" });
+    }
+    
+    const user = await UserModel.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+    
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await UserModel.findByIdAndUpdate(req.userId, { password: hashedNewPassword });
+    
+    res.status(200).json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: "Failed to update password" });
+  }
+});
+app.get("/user/categories", auth, async (req, res) => {
+  try {
+    const categories = await CustomCategoryModel.find({ userId: req.userId }).sort({ name: 1 });
+    res.status(200).json(categories);
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({ error: "Failed to fetch categories" });
+  }
+});
+app.post("/user/categories", auth, async (req, res) => {
+  try {
+    const { name, type, color, icon } = req.body;
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: "Category name is required" });
+    }
+        const existingCategory = await CustomCategoryModel.findOne({ 
+      userId: req.userId, 
+      name: name.trim() 
+    });
+    
+    if (existingCategory) {
+      return res.status(400).json({ error: "Category already exists" });
+    }
+    
+    const newCategory = new CustomCategoryModel({
+      userId: req.userId,
+      name: name.trim(),
+      type: type || 'expense',
+      color: color || '#007bff',
+      icon: icon || '💰'
+    });
+    
+    await newCategory.save();
+    res.status(201).json({ message: "Category added successfully", category: newCategory });
+  } catch (error) {
+    console.error('Add category error:', error);
+    res.status(500).json({ error: "Failed to add category" });
+  }
+});
+app.put("/user/categories/:id", auth, async (req, res) => {
+  try {
+    const category = await CustomCategoryModel.findById(req.params.id);
+    
+    if (!category || category.userId.toString() !== req.userId) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+    
+    const updatedCategory = await CustomCategoryModel.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    
+    res.status(200).json({ message: "Category updated successfully", category: updatedCategory });
+  } catch (error) {
+    console.error('Update category error:', error);
+    res.status(500).json({ error: "Failed to update category" });
+  }
+});
+app.delete("/user/categories/:id", auth, async (req, res) => {
+  try {
+    const category = await CustomCategoryModel.findById(req.params.id);
+    
+    if (!category || category.userId.toString() !== req.userId) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+    
+    await CustomCategoryModel.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: "Category deleted successfully" });
+  } catch (error) {
+    console.error('Delete category error:', error);
+    res.status(500).json({ error: "Failed to delete category" });
+  }
+});
+app.get("/user/export-data", auth, async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.userId).select('-password');
+    const transactions = await TransactionModel.find({ userId: req.userId });
+    const budgets = await BudgetModel.find({ userId: req.userId });
+    const bills = await RecurringBillModel.find({ userId: req.userId });
+    const debts = await DebtModel.find({ userId: req.userId });
+    const preferences = await UserPreferencesModel.findOne({ userId: req.userId });
+    const categories = await CustomCategoryModel.find({ userId: req.userId });
+    
+    const exportData = {
+      user,
+      transactions,
+      budgets,
+      bills,
+      debts,
+      preferences,
+      categories,
+      exportDate: new Date().toISOString()
+    };
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="financial-data-export.json"');
+    res.json(exportData);
+  } catch (error) {
+    console.error('Data export error:', error);
+    res.status(500).json({ error: "Failed to export data" });
+  }
+});
+app.delete("/user/clear-data", auth, async (req, res) => {
+  try {
+    await Promise.all([
+      TransactionModel.deleteMany({ userId: req.userId }),
+      BudgetModel.deleteMany({ userId: req.userId }),
+      RecurringBillModel.deleteMany({ userId: req.userId }),
+      DebtModel.deleteMany({ userId: req.userId }),
+      DebtPaymentModel.deleteMany({ userId: req.userId }),
+      TaxEstimationModel.deleteMany({ userId: req.userId }),
+      CustomCategoryModel.deleteMany({ userId: req.userId })
+    ]);
+    
+    res.status(200).json({ message: "All data cleared successfully" });
+  } catch (error) {
+    console.error('Clear data error:', error);
+    res.status(500).json({ error: "Failed to clear data" });
+  }
+});
+app.delete("/user/account", auth, async (req, res) => {
+  try {
+    await Promise.all([
+      TransactionModel.deleteMany({ userId: req.userId }),
+      BudgetModel.deleteMany({ userId: req.userId }),
+      RecurringBillModel.deleteMany({ userId: req.userId }),
+      DebtModel.deleteMany({ userId: req.userId }),
+      DebtPaymentModel.deleteMany({ userId: req.userId }),
+      TaxEstimationModel.deleteMany({ userId: req.userId }),
+      UserPreferencesModel.deleteMany({ userId: req.userId }),
+      CustomCategoryModel.deleteMany({ userId: req.userId })
+    ]);
+    
+    await UserModel.findByIdAndDelete(req.userId);
+    
+    res.status(200).json({ message: "Account deleted successfully" });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: "Failed to delete account" });
+  }
+});
+
+app.get("/user/profile", auth, async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});

@@ -14,8 +14,58 @@ const Dashboard = () => {
   const [monthlySummary, setMonthlySummary] = useState({});
   const [yearlySummary, setYearlySummary] = useState({});
   const [activeChart, setActiveChart] = useState('bar');
-  
-  // Budget Alert System
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+
+  const [settings, setSettings] = useState({
+    currency: localStorage.getItem('currency') || 'BDT',
+    dateFormat: localStorage.getItem('dateFormat') || 'DD/MM/YYYY',
+    numberFormat: localStorage.getItem('numberFormat') || '1,234.56',
+    autoLogout: localStorage.getItem('autoLogout') || '30',
+    notifications: {
+      budgetAlerts: localStorage.getItem('budgetAlerts') !== 'false',
+      billReminders: localStorage.getItem('billReminders') !== 'false',
+      monthlyReports: localStorage.getItem('monthlyReports') !== 'false',
+      emailNotifications: localStorage.getItem('emailNotifications') === 'true'
+    }
+  });
+
+  const formatCurrency = (amount) => {
+    const currencySymbols = {
+      'BDT': '৳',
+      'USD': '$',
+      'EUR': '€',
+      'GBP': '£',
+      'INR': '₹'
+    };
+    
+    const symbol = currencySymbols[settings.currency] || '৳';
+    
+    let formattedAmount;
+    if (settings.numberFormat === '1,234.56') {
+      formattedAmount = amount.toLocaleString('en-US', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      });
+    } else {
+      formattedAmount = amount.toFixed(2);
+    }
+    
+    return `${symbol}${formattedAmount}`;
+  };
+
+  const handleSettingsChange = (key, value) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+    localStorage.setItem(key, value);
+  };
+
+  const handleNotificationChange = (key, value) => {
+    setSettings(prev => ({
+      ...prev,
+      notifications: { ...prev.notifications, [key]: value }
+    }));
+    localStorage.setItem(key, value);
+  };
+
   const [budgets, setBudgets] = useState([]);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [budgetAlerts, setBudgetAlerts] = useState([]);
@@ -25,7 +75,6 @@ const Dashboard = () => {
     alertThreshold: 80
   });
 
-  // Recurring Bills 
   const [recurringBills, setRecurringBills] = useState([]);
   const [showBillForm, setShowBillForm] = useState(false);
   const [billAlerts, setBillAlerts] = useState([]);
@@ -64,6 +113,7 @@ const Dashboard = () => {
   ];
 
   const frequencyOptions = [
+    { value: 'daily', label: 'Daily' },
     { value: 'weekly', label: 'Weekly' },
     { value: 'monthly', label: 'Monthly' },
     { value: 'quarterly', label: 'Quarterly' },
@@ -97,11 +147,13 @@ const Dashboard = () => {
       if (decoded.exp * 1000 < Date.now()) {
         throw new Error('Token expired');
       }
+      
       setUser(decoded);
       fetchTransactions();
       loadBudgets();
       loadRecurringBills();
       loadDebts();
+      loadTaxEstimations(); 
     } catch (error) {
       console.error('Authentication error:', error);
       localStorage.removeItem('token');
@@ -109,14 +161,34 @@ const Dashboard = () => {
     }
   }, [token]);
 
- const loadBudgets = async () => {
-  try {
-    const res = await axios.get(`${API_URL}/budgets`, config);
-    setBudgets(res.data);
-  } catch (error) {
-    console.error('Error loading budgets:', error);
-  }
-};
+  useEffect(() => {
+    if (theme === 'auto') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = (e) => {
+        document.body.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+      };
+      
+      document.body.setAttribute('data-theme', mediaQuery.matches ? 'dark' : 'light');
+      mediaQuery.addEventListener('change', handleChange);
+      
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+
+  const loadBudgets = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/budgets`, config);
+      setBudgets(res.data);
+    } catch (error) {
+      console.error('Error loading budgets:', error);
+    }
+  };
  
   const loadRecurringBills = async () => {
     try {
@@ -131,15 +203,18 @@ const Dashboard = () => {
   const saveBudgets = async (newBudgets) => {
     setBudgets(newBudgets);
   };
+
   const saveRecurringBills = async (newBills) => {
     setRecurringBills(newBills);
     checkBillAlerts(newBills);
   };
 
-  // Recurring Bills Functions
   const getNextDueDate = (lastDate, frequency) => {
     const date = new Date(lastDate);
     switch (frequency) {
+      case 'daily':
+        date.setDate(date.getDate() + 1);
+        break;
       case 'weekly':
         date.setDate(date.getDate() + 7);
         break;
@@ -172,7 +247,7 @@ const Dashboard = () => {
         alerts.push({
           ...bill,
           daysUntilDue: daysDiff,
-          isOverdue: daysDiff < 0
+          isOverdue: false
         });
       } else if (daysDiff < 0) {
         alerts.push({
@@ -190,7 +265,7 @@ const Dashboard = () => {
     setBillFormData({ ...billFormData, [e.target.name]: e.target.value });
   };
 
-    const handleBillSubmit = async (e) => {
+  const handleBillSubmit = async (e) => {
     e.preventDefault();
     
     if (!billFormData.name || !billFormData.amount || !billFormData.nextDueDate) {
@@ -224,20 +299,20 @@ const Dashboard = () => {
     }
   };
 
-    const editBill = (bill) => {
-      setBillFormData({
-        name: bill.name,
-        amount: bill.amount.toString(),
-        category: bill.category,
-        frequency: bill.frequency,
-        nextDueDate: bill.nextDueDate,
-        reminderDays: bill.reminderDays.toString(),
-        isActive: bill.isActive,
-        description: bill.description || ''
-      });
-      setEditBillId(bill._id);
-      setShowBillForm(true);
-    };
+  const editBill = (bill) => {
+    setBillFormData({
+      name: bill.name,
+      amount: bill.amount.toString(),
+      category: bill.category,
+      frequency: bill.frequency,
+      nextDueDate: bill.nextDueDate,
+      reminderDays: bill.reminderDays.toString(),
+      isActive: bill.isActive,
+      description: bill.description || ''
+    });
+    setEditBillId(bill._id);
+    setShowBillForm(true);
+  };
 
   const deleteBill = async (billId) => {
     if (confirm('Are you sure you want to delete this recurring bill?')) {
@@ -278,7 +353,6 @@ const Dashboard = () => {
 
       await axios.post(`${API_URL}/transactions`, newTransaction, config);
       
-
       const nextDue = getNextDueDate(bill.nextDueDate, bill.frequency);
       await axios.put(`${API_URL}/recurring-bills/${billId}`, {
         ...bill,
@@ -287,13 +361,14 @@ const Dashboard = () => {
       }, config);
 
       await Promise.all([fetchTransactions(), loadRecurringBills()]);
+      
+      alert(`Bill "${bill.name}" marked as paid for ${formatCurrency(bill.amount)}. Next due date: ${nextDue}`);
     } catch (error) {
       console.error('Error marking bill as paid:', error);
       alert('Failed to mark bill as paid. Please try again.');
     }
   };
 
-  // Debt/Loan Tracker
   const [debts, setDebts] = useState([]);
   const [showDebtForm, setShowDebtForm] = useState(false);
   const [editDebtId, setEditDebtId] = useState(null);
@@ -308,105 +383,106 @@ const Dashboard = () => {
     debtType: 'credit_card', 
     paymentFrequency: 'monthly'
   });
+
   const loadDebts = async () => {
-  try {
-    const res = await axios.get(`${API_URL}/debts`, config);
-    setDebts(res.data);
-  } catch (error) {
-    console.error('Error loading debts:', error);
-  }
-};
-
-const saveDebt = async (debtData) => {
-  try {
-    if (editDebtId) {
-      await axios.put(`${API_URL}/debts/${editDebtId}`, debtData, config);
-    } else {
-      await axios.post(`${API_URL}/debts`, debtData, config);
-    }
-    await loadDebts();
-  } catch (error) {
-    console.error('Error saving debt:', error);
-    throw error;
-  }
-};
-
-const deleteDebt = async (debtId) => {
-  if (confirm('Are you sure you want to delete this debt?')) {
     try {
-      await axios.delete(`${API_URL}/debts/${debtId}`, config);
-      await loadDebts();
+      const res = await axios.get(`${API_URL}/debts`, config);
+      setDebts(res.data);
     } catch (error) {
-      console.error('Error deleting debt:', error);
+      console.error('Error loading debts:', error);
     }
-  }
-};
-
-const recordDebtPayment = async (debtId, paymentAmount) => {
-  try {
-    await axios.post(`${API_URL}/debts/${debtId}/payment`, {
-      amount: paymentAmount
-    }, config);
-    await Promise.all([loadDebts(), fetchTransactions()]);
-  } catch (error) {
-    console.error('Error recording payment:', error);
-    throw error;
-  }
-};
-const getTotalDebt = () => {
-  return debts.reduce((total, debt) => total + debt.currentBalance, 0);
-};
-
-const handleDebtFormChange = (e) => {
-  setDebtFormData({ ...debtFormData, [e.target.name]: e.target.value });
-};
-
-const handleDebtSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!debtFormData.name || !debtFormData.totalAmount || !debtFormData.currentBalance) {
-    alert('Please fill in all required fields');
-    return;
-  }
-
-  const debtData = {
-    ...debtFormData,
-    totalAmount: Number(debtFormData.totalAmount),
-    currentBalance: Number(debtFormData.currentBalance),
-    interestRate: Number(debtFormData.interestRate) || 0,
-    minimumPayment: Number(debtFormData.minimumPayment) || 0
   };
 
-  try {
-    await saveDebt(debtData);
+  const saveDebt = async (debtData) => {
+    try {
+      if (editDebtId) {
+        await axios.put(`${API_URL}/debts/${editDebtId}`, debtData, config);
+      } else {
+        await axios.post(`${API_URL}/debts`, debtData, config);
+      }
+      await loadDebts();
+    } catch (error) {
+      console.error('Error saving debt:', error);
+      throw error;
+    }
+  };
+
+  const deleteDebt = async (debtId) => {
+    if (confirm('Are you sure you want to delete this debt?')) {
+      try {
+        await axios.delete(`${API_URL}/debts/${debtId}`, config);
+        await loadDebts();
+      } catch (error) {
+        console.error('Error deleting debt:', error);
+      }
+    }
+  };
+
+  const recordDebtPayment = async (debtId, paymentAmount) => {
+    try {
+      await axios.post(`${API_URL}/debts/${debtId}/payment`, {
+        amount: paymentAmount
+      }, config);
+      await Promise.all([loadDebts(), fetchTransactions()]);
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      throw error;
+    }
+  };
+
+  const getTotalDebt = () => {
+    return debts.reduce((total, debt) => total + debt.currentBalance, 0);
+  };
+
+  const handleDebtFormChange = (e) => {
+    setDebtFormData({ ...debtFormData, [e.target.name]: e.target.value });
+  };
+
+  const handleDebtSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!debtFormData.name || !debtFormData.totalAmount || !debtFormData.currentBalance) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    const debtData = {
+      ...debtFormData,
+      totalAmount: Number(debtFormData.totalAmount),
+      currentBalance: Number(debtFormData.currentBalance),
+      interestRate: Number(debtFormData.interestRate) || 0,
+      minimumPayment: Number(debtFormData.minimumPayment) || 0
+    };
+
+    try {
+      await saveDebt(debtData);
+      setDebtFormData({
+        name: '', totalAmount: '', currentBalance: '', interestRate: '',
+        minimumPayment: '', dueDate: '', lender: '', debtType: 'credit_card',
+        paymentFrequency: 'monthly'
+      });
+      setEditDebtId(null);
+      setShowDebtForm(false);
+    } catch (error) {
+      alert('Failed to save debt');
+    }
+  };
+
+  const editDebt = (debt) => {
     setDebtFormData({
-      name: '', totalAmount: '', currentBalance: '', interestRate: '',
-      minimumPayment: '', dueDate: '', lender: '', debtType: 'credit_card',
-      paymentFrequency: 'monthly'
+      name: debt.name,
+      totalAmount: debt.totalAmount.toString(),
+      currentBalance: debt.currentBalance.toString(),
+      interestRate: debt.interestRate.toString(),
+      minimumPayment: debt.minimumPayment.toString(),
+      dueDate: debt.dueDate ? debt.dueDate.split('T')[0] : '',
+      lender: debt.lender || '',
+      debtType: debt.debtType,
+      paymentFrequency: debt.paymentFrequency
     });
-    setEditDebtId(null);
-    setShowDebtForm(false);
-  } catch (error) {
-    alert('Failed to save debt');
-  }
-};
-
-const editDebt = (debt) => {
-  setDebtFormData({
-    name: debt.name,
-    totalAmount: debt.totalAmount.toString(),
-    currentBalance: debt.currentBalance.toString(),
-    interestRate: debt.interestRate.toString(),
-    minimumPayment: debt.minimumPayment.toString(),
-    dueDate: debt.dueDate ? debt.dueDate.split('T')[0] : '',
-    lender: debt.lender || '',
-    debtType: debt.debtType,
-    paymentFrequency: debt.paymentFrequency
-  });
-  setEditDebtId(debt._id);
-  setShowDebtForm(true);
-};
-
+    setEditDebtId(debt._id);
+    setShowDebtForm(true);
+  };
 
   const fetchTransactions = async () => {
     try {
@@ -449,7 +525,6 @@ const editDebt = (debt) => {
     }
   }, [user, transactions, budgets]);
 
-  // Budget Alert
   const checkBudgetAlerts = (transactionData = transactions) => {
     const currentMonth = new Date().toISOString().slice(0, 7);
     const alerts = [];
@@ -491,6 +566,11 @@ const editDebt = (debt) => {
       alert('Failed to create budget');
     }
   };
+
+  const handleBudgetFormChange = (e) => {
+    setBudgetFormData({ ...budgetFormData, [e.target.name]: e.target.value });
+  };
+
   const deleteBudget = async (budgetId) => {
     try {
       await axios.delete(`${API_URL}/budgets/${budgetId}`, config);
@@ -501,7 +581,7 @@ const editDebt = (debt) => {
     }
   };
 
-    const getMonthlySpendingByCategory = (transactionData, category, month) => {
+  const getMonthlySpendingByCategory = (transactionData, category, month) => {
     return transactionData
       .filter(txn => {
         const txnMonth = new Date(txn.date).toISOString().slice(0, 7);
@@ -511,7 +591,6 @@ const editDebt = (debt) => {
       })
       .reduce((sum, txn) => sum + Number(txn.amount), 0);
   };
-
 
   const calculateCategorySummary = (transactions) => {
     const summary = {};
@@ -538,36 +617,63 @@ const editDebt = (debt) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleBudgetFormChange = (e) => {
-    setBudgetFormData({ ...budgetFormData, [e.target.name]: e.target.value });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     const token = localStorage.getItem("token");
-    const config = {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-
+    
     try {
-      if (editId) {
-        await axios.put(`${API_URL}/transactions/${editId}`, formData, config);
+      if (selectedFile) {
+        const uploadData = new FormData();
+        uploadData.append('title', formData.title);
+        uploadData.append('amount', formData.amount);
+        uploadData.append('type', formData.type);
+        uploadData.append('category', formData.category);
+        uploadData.append('receipt', selectedFile);
+                
+        const config = {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        };
+        
+        if (editId) {
+          await axios.put(`${API_URL}/transactions/${editId}`, {
+            title: formData.title,
+            amount: formData.amount,
+            type: formData.type,
+            category: formData.category
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          
+          await uploadReceipt(editId, selectedFile);
+        } else {
+          await axios.post(`${API_URL}/transactions/with-receipt`, uploadData, config);
+        }
       } else {
-        await axios.post(
-          `${API_URL}/transactions`,
-          { ...formData, date: new Date().toISOString() },
-          config
-        );
+        const config = {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        };
+        
+        if (editId) {
+          await axios.put(`${API_URL}/transactions/${editId}`, formData, config);
+        } else {
+          await axios.post(`${API_URL}/transactions`, {
+            ...formData,
+            date: new Date().toISOString()
+          }, config);
+        }
       }
 
       setFormData({ title: '', amount: '', type: 'income', category: '' });
+      setSelectedFile(null);
       setEditId(null);
       fetchTransactions();
     } catch (error) {
-      console.error('Error saving transaction:', error.response?.data || error.message);
+      console.error('Error saving transaction:', error);
+      alert('Failed to save transaction');
     }
   };
 
@@ -664,7 +770,6 @@ const editDebt = (debt) => {
     }).sort((a, b) => new Date(a.month + ' 2024') - new Date(b.month + ' 2024'));
   };
 
-  // Chart Components
   const renderBarChart = () => (
     <div className="chart-container">
       <h3 className="chart-title">Monthly Income vs Expenses</h3>
@@ -673,7 +778,7 @@ const editDebt = (debt) => {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" />
           <YAxis />
-          <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
+          <Tooltip formatter={(value) => formatCurrency(value)} />
           <Legend />
           <Bar dataKey="income" fill="#4CAF50" name="Income" />
           <Bar dataKey="expense" fill="#F44336" name="Expenses" />
@@ -713,7 +818,7 @@ const editDebt = (debt) => {
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
+            <Tooltip formatter={(value) => formatCurrency(value)} />
           </PieChart>
         </ResponsiveContainer>
         <div className="pie-legend">
@@ -723,7 +828,7 @@ const editDebt = (debt) => {
                 className="legend-color"
                 data-color={item.color}
               ></div>
-              <span className="legend-text">{item.name}: ${item.value.toFixed(2)}</span>
+              <span className="legend-text">{item.name}: {formatCurrency(item.value)}</span>
             </div>
           ))}
         </div>
@@ -741,7 +846,7 @@ const editDebt = (debt) => {
           <YAxis />
           <Tooltip 
             formatter={(value, name) => [
-              name === 'balance' ? `$${value.toFixed(2)}` : `${value}%`,
+              name === 'balance' ? formatCurrency(value) : `${value}%`,
               name === 'balance' ? 'Monthly Balance' : 'Savings Rate'
             ]} 
           />
@@ -812,7 +917,7 @@ const editDebt = (debt) => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
-              <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
+              <Tooltip formatter={(value) => formatCurrency(value)} />
               <Legend />
               {allCategories.map((category, index) => (
                 <Bar 
@@ -830,7 +935,6 @@ const editDebt = (debt) => {
     );
   };
 
-
   const getUpcomingBillsTotal = () => {
     const today = new Date();
     const nextMonth = new Date();
@@ -841,7 +945,7 @@ const editDebt = (debt) => {
       .reduce((total, bill) => total + bill.amount, 0);
   };
 
-    const handleExport = async (format) => {
+  const handleExport = async (format) => {
     try {
       const params = new URLSearchParams();
       if (exportFilters.startDate) params.append('startDate', exportFilters.startDate);
@@ -858,24 +962,22 @@ const editDebt = (debt) => {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Export failed: ${response.status}`);
       }
 
       const blob = await response.blob();
-      const downloadUrl = URL.createObjectURL(blob);
+      
+      const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.style.display = 'none';
       link.href = downloadUrl;
       link.download = `transactions_${new Date().toISOString().split('T')[0]}.${format}`;
-      link.target = '_blank'; 
       
       document.body.appendChild(link);
       link.click();
       
       setTimeout(() => {
         document.body.removeChild(link);
-        URL.revokeObjectURL(downloadUrl);
+        window.URL.revokeObjectURL(downloadUrl);
       }, 100);
       
     } catch (error) {
@@ -884,20 +986,146 @@ const editDebt = (debt) => {
     }
   };
 
+  const [showTaxForm, setShowTaxForm] = useState(false);
+  const [taxResult, setTaxResult] = useState(null);
+  const [taxEstimations, setTaxEstimations] = useState([]);
+  const [taxFormData, setTaxFormData] = useState({
+    totalIncome: '',
+    basicExemption: 350000,
+    investment: '',
+    donation: '',
+    disability: '',
+    other: '',
+    taxYear: new Date().getFullYear().toString()
+  });
+
+  const loadTaxEstimations = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/tax-estimation`, config);
+      setTaxEstimations(res.data);
+    } catch (error) {
+      console.error('Error loading tax estimations:', error);
+    }
+  };
+
+  const calculateTax = async () => {
+    if (!taxFormData.totalIncome) {
+      alert('Please enter total income');
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        totalIncome: taxFormData.totalIncome || 0,
+        basicExemption: taxFormData.basicExemption || 350000,
+        investment: taxFormData.investment || 0,
+        donation: taxFormData.donation || 0,
+        disability: taxFormData.disability || 0,
+        other: taxFormData.other || 0
+      });
+      
+      const res = await axios.get(`${API_URL}/tax-estimation/calculate?${params}`, config);
+      setTaxResult(res.data);
+    } catch (error) {
+      console.error('Error calculating tax:', error);
+      alert('Failed to calculate tax. Please try again.');
+    }
+  };
+
+  const saveTaxEstimation = async () => {
+    if (!taxResult) return;
+    
+    try {
+      await axios.post(`${API_URL}/tax-estimation`, {
+        ...taxResult,
+        taxYear: taxFormData.taxYear
+      }, config);
+      
+      setTaxFormData({
+        totalIncome: '', basicExemption: 350000, investment: '',
+        donation: '', disability: '', other: '', taxYear: new Date().getFullYear().toString()
+      });
+      setTaxResult(null);
+      setShowTaxForm(false);
+      await loadTaxEstimations();
+    } catch (error) {
+      console.error('Error saving tax estimation:', error);
+    }
+  };
+
+  const handleTaxFormChange = (e) => {
+    setTaxFormData({ ...taxFormData, [e.target.name]: e.target.value });
+  };
+
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const uploadReceipt = async (transactionId, file) => {
+    const formData = new FormData();
+    formData.append('receipt', file);
+
+    try {
+      const response = await axios.post(
+        `${API_URL}/transactions/${transactionId}/receipt`,
+        formData,
+        {
+          ...config,
+          headers: {
+            ...config.headers,
+            'Content-Type': 'multipart/form-data',
+          },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            setUploadProgress(percentCompleted);
+          },
+        }
+      );
+      
+      fetchTransactions(); 
+      return response.data;
+    } catch (error) {
+      console.error('Receipt upload error:', error);
+      throw error;
+    }
+  };
+
+  const deleteReceipt = async (transactionId) => {
+    try {
+      await axios.delete(`${API_URL}/transactions/${transactionId}/receipt`, config);
+      fetchTransactions();
+      alert('Receipt deleted successfully');
+    } catch (error) {
+      console.error('Receipt deletion error:', error);
+      alert('Failed to delete receipt');
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <div className="sidebar">
-        <div className="sidebar-header">
-          <h2>Finance App</h2>
-        </div>
-        <div className="user-profile">
-          <div className="user-avatar">{user?.name?.charAt(0) || "U"}</div>
-          <div className="user-details">
-            <h3>{user?.name || "User Name"}</h3>
+        <div class="sidebar-header">
+          <div className="logo-container" onClick={() => window.location.href = '/'} style={{cursor: 'pointer'}}>
+            <h2>Midoru</h2>
           </div>
+          </div>
+          <div className="user-profile">
+            <div className="user-avatar">{user?.name?.charAt(0) || "U"}</div>
+              <div className="user-details">
+                <h3>{user?.name || "User Name"}</h3>
+              </div>
         </div>
 
           <nav className="sidebar-nav">
+            
             <button 
               className={activePage === 'dashboard' ? 'active' : ''} 
               onClick={() => setActivePage('dashboard')}
@@ -941,6 +1169,12 @@ const editDebt = (debt) => {
               Category
             </button>
             <button 
+              className={activePage === 'tax' ? 'active' : ''} 
+              onClick={() => setActivePage('tax')}
+            >
+              Tax Estimation
+            </button>
+            <button 
               className={activePage === 'reports' ? 'active' : ''} 
               onClick={() => setActivePage('reports')}
             >
@@ -951,6 +1185,13 @@ const editDebt = (debt) => {
               onClick={() => setActivePage('settings')}
             >
               Settings
+            </button>
+            <button 
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              title="Toggle theme"
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
             </button>
           </nav>
       </div>
@@ -967,24 +1208,24 @@ const editDebt = (debt) => {
             <div className="summary-grid">
               <div className="summary-card income-card">
                 <h3>Total Income</h3>
-                <p>${totalIncome.toFixed(2)}</p>
+                <p>{formatCurrency(totalIncome)}</p>
               </div>
               <div className="summary-card expense-card">
                 <h3>Total Expense</h3>
-                <p>${totalExpense.toFixed(2)}</p>
+                <p>{formatCurrency(totalExpense)}</p>  
               </div>
               <div className="summary-card balance-card">
                 <h3>Balance</h3>
-                <p>${(totalIncome - totalExpense).toFixed(2)}</p>
+                 <p>{formatCurrency(totalIncome - totalExpense)}</p>
               </div>
               <div className="summary-card bills-card">
                 <h3>Upcoming Bills</h3>
-                <p>${getUpcomingBillsTotal().toFixed(2)}</p>
+                <p>{formatCurrency(getUpcomingBillsTotal())}</p>
                 <small>Next 30 days</small>
               </div>
               <div className="summary-card debt-card">
                 <h3>Total Debt</h3>
-                <p>${getTotalDebt().toFixed(2)}</p>
+                <p>{formatCurrency(getTotalDebt())}</p>
               </div>
             </div>
 
@@ -1002,15 +1243,13 @@ const editDebt = (debt) => {
                         <h4>{alert.category}</h4>
                       </div>
                       <div className="alert-details">
-                        <p>Spent: ${alert.spent.toFixed(2)} of ${alert.limit.toFixed(2)}</p>
-                        <p className="alert-percentage">{alert.percentage}% used</p>
+                        <p>Spent: {formatCurrency(alert.spent)} of {formatCurrency(alert.limit)}</p>                        <p className="alert-percentage">{alert.percentage}% used</p>
                         {alert.type === 'over' && (
-                          <p className="over-budget">Over budget by ${(alert.spent - alert.limit).toFixed(2)}</p>
-                        )}
+                        <p className="over-budget">Over budget by {formatCurrency(alert.spent - alert.limit)}</p>                        )}
                       </div>
                       <div className="progress-bar">
                         <div 
-                          className={`progress-fill ${alert.type}`}
+                          className={`progress-fill {formatCurrency(alert.type)}`}
                           style={{ width: `${Math.min(alert.percentage, 100)}%` }}
                         ></div>
                       </div>
@@ -1026,8 +1265,7 @@ const editDebt = (debt) => {
                 <h2>Bill Reminders</h2>
                 <div className="alerts-grid">
                   {billAlerts.map((bill, index) => (
-                    <div key={index} className={`bill-alert-card ${bill.isOverdue ? 'overdue' : 'upcoming'}`}>
-                      <div className="bill-alert-header">
+                      <div key={index} className={`bill-alert-card ${bill.isOverdue ? 'overdue' : 'upcoming'}`}>                      <div className="bill-alert-header">
                         <span className="bill-alert-icon">
                           {bill.isOverdue ? '🚨' : '⏰'}
                         </span>
@@ -1324,7 +1562,7 @@ const editDebt = (debt) => {
                             <div className="progress-bar">
                               <div 
                                 className="progress-fill paid"
-                                style={{ width: `${payoffPercentage}%` }}
+                                style={{ width: `৳{payoffPercentage}%` }}
                               ></div>
                             </div>
                             <span className="progress-text">{payoffPercentage.toFixed(1)}% paid off</span>
@@ -1390,8 +1628,8 @@ const editDebt = (debt) => {
                     {Object.entries(categorySummary).slice(0, 5).map(([title, values]) => (
                       <tr key={title}>
                         <td>{title}</td>
-                        <td className="income">${values.income.toFixed(2)}</td>
-                        <td className="expense">${values.expense.toFixed(2)}</td>
+                        <td className="income"><p>৳{totalIncome.toFixed(2)}</p>{values.income.toFixed(2)}</td>
+                        <td className="expense"><p>৳{totalIncome.toFixed(2)}</p>{values.expense.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1959,6 +2197,22 @@ const editDebt = (debt) => {
                     ))}
                   </select>
                 </div>
+                <div className="form-group">
+                    <label>Receipt (optional)</label>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handleFileSelect}
+                      className="file-input"
+                    />
+                    {selectedFile && (
+                      <div className="file-preview">
+                        <span>{selectedFile.name}</span>
+                        <button type="button" onClick={() => setSelectedFile(null)}>×</button>
+                      </div>
+                    )}
+                </div>
+                  
                 <div className="form-actions">
                   <button type="submit" className="primary-btn">
                     {editId ? 'Update' : 'Add'} Transaction
@@ -1986,6 +2240,7 @@ const editDebt = (debt) => {
                       <th>Amount</th>
                       <th>Type</th>
                       <th>Category</th>
+                      <th>Receipt</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -2000,6 +2255,60 @@ const editDebt = (debt) => {
                           </span>
                         </td>
                         <td>{txn.category || 'Uncategorized'}</td>
+                       <td>
+                    {txn.receipt ? (
+                      <div className="receipt-info">
+                        <a 
+                          href={`${API_URL}/${txn.receipt.path}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="receipt-link"
+                          onClick={(e) => {
+                            fetch(`${API_URL}/${txn.receipt.path}`, { method: 'HEAD' })
+                              .then(response => {
+                                if (!response.ok) {
+                                  e.preventDefault();
+                                  alert('Receipt file not found or unavailable');
+                                }
+                              })
+                              .catch(() => {
+                                e.preventDefault();
+                                alert('Error accessing receipt');
+                              });
+                          }}
+                        >
+                          View Receipt
+                        </a>
+                        <button
+                          className="icon-btn delete-receipt"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (confirm('Delete this receipt?')) {
+                              deleteReceipt(txn._id);
+                            }
+                          }}
+                          title="Delete receipt"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="no-receipt">
+                        <span className="no-receipt-text">No receipt</span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              uploadReceipt(txn._id, file);
+                            }
+                          }}
+                          className="receipt-upload"
+                        />
+                      </div>
+                    )}
+                    </td>
                         <td className="actions">
                           <button
                             className="icon-btn edit"
@@ -2313,6 +2622,174 @@ const editDebt = (debt) => {
           </div>
         )}
 
+        {activePage === 'tax' && (
+  <>
+    <div className="dashboard-header">
+      <h1>Tax Estimation Tool</h1>
+      <p>Calculate your income tax based on Bangladesh tax laws</p>
+    </div>
+
+    <div className="card tax-calculator">
+      <div className="tax-header">
+        <h2>Income Tax Calculator</h2>
+        <button 
+          className="primary-btn"
+          onClick={() => setShowTaxForm(!showTaxForm)}
+        >
+          {showTaxForm ? 'Cancel' : 'New Calculation'}
+        </button>
+      </div>
+
+      {showTaxForm && (
+        <div className="tax-form">
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Total Annual Income (BDT) *</label>
+              <input
+                type="number"
+                name="totalIncome"
+                value={taxFormData.totalIncome}
+                placeholder="Enter your total income"
+                onChange={handleTaxFormChange}
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Tax Year</label>
+              <input
+                type="text"
+                name="taxYear"
+                value={taxFormData.taxYear}
+                onChange={handleTaxFormChange}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Basic Exemption (BDT)</label>
+              <select name="basicExemption" value={taxFormData.basicExemption} onChange={handleTaxFormChange}>
+                <option value="350000">General Taxpayer (3.5 Lac)</option>
+                <option value="400000">Female/Senior Citizen (4 Lac)</option>
+                <option value="475000">Disabled Person (4.75 Lac)</option>
+                <option value="400000">Gazetted War Veteran (4 Lac)</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Investment Allowance (BDT)</label>
+              <input
+                type="number"
+                name="investment"
+                value={taxFormData.investment}
+                placeholder="Max 25% of income or 15 Lac"
+                onChange={handleTaxFormChange}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Donation Allowance (BDT)</label>
+              <input
+                type="number"
+                name="donation"
+                value={taxFormData.donation}
+                placeholder="Charitable donations"
+                onChange={handleTaxFormChange}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Other Allowances (BDT)</label>
+              <input
+                type="number"
+                name="other"
+                value={taxFormData.other}
+                placeholder="Other deductible allowances"
+                onChange={handleTaxFormChange}
+              />
+            </div>
+          </div>
+          
+          <div className="form-actions">
+            <button type="button" className="primary-btn" onClick={calculateTax}>
+              Calculate Tax
+            </button>
+          </div>
+        </div>
+      )}
+
+      {taxResult && (
+  <div className="tax-result">
+    <h3>Tax Calculation Result</h3>
+    <div className="result-summary">
+      <div className="result-item">
+        <label>Total Income:</label>
+        <span>৳{(taxResult.totalIncome || 0).toLocaleString()}</span>
+      </div>
+      <div className="result-item">
+        <label>Taxable Income:</label>
+        <span>৳{(taxResult.taxableIncome || 0).toLocaleString()}</span>
+      </div>
+      <div className="result-item total-tax">
+        <label>Total Tax Payable:</label>
+        <span>৳{(taxResult.totalTax || 0).toLocaleString()}</span>
+      </div>
+    </div>
+    
+    {taxResult.taxBreakdown && taxResult.taxBreakdown.length > 0 && (
+      <div className="tax-breakdown">
+        <h4>Tax Breakdown by Slabs:</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>Tax Rate</th>
+              <th>Taxable Amount</th>
+              <th>Tax Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {taxResult.taxBreakdown.map((slab, index) => (
+              <tr key={index}>
+                <td>{slab.slabRate || 0}%</td>
+                <td>৳{(slab.slabIncome || 0).toLocaleString()}</td>
+                <td>৳{(slab.taxAmount || 0).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+    
+    <button className="secondary-btn" onClick={saveTaxEstimation}>
+      Save Estimation
+    </button>
+  </div>
+)}
+
+{taxEstimations.length > 0 && (
+  <div className="saved-estimations">
+    <h3>Saved Tax Estimations</h3>
+    <div className="estimations-list">
+      {taxEstimations.slice(0, 5).map(estimation => (
+        <div key={estimation._id} className="estimation-card">
+          <div className="estimation-header">
+            <h4>Tax Year {estimation.taxYear || 'Unknown'}</h4>
+            <span className="estimation-date">
+              {new Date(estimation.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+          <div className="estimation-details">
+            <p>Income: ৳{(estimation.totalIncome || 0).toLocaleString()}</p>
+            <p>Tax: ৳{(estimation.totalTax || 0).toLocaleString()}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+    </div>
+  </>
+)}
+
         {activePage === 'category' && (
           <>
             <div className="dashboard-header">
@@ -2345,6 +2822,8 @@ const editDebt = (debt) => {
             </div>
           </>
         )}
+
+        
 
         {activePage === 'reports' && (
           <>
@@ -2453,25 +2932,390 @@ const editDebt = (debt) => {
           </>
         )}
 
-        {activePage === 'settings' && (
+{activePage === 'settings' && (
           <>
             <div className="dashboard-header">
               <h1>Settings</h1>
               <p>Manage your account settings and preferences.</p>
             </div>
 
+            {/* Profile Settings */}
             <div className="card">
-              <h2>Account Settings</h2>
-              <p>Settings functionality coming soon...</p>
-              <button 
-                className="danger-btn"
-                onClick={() => {
-                  localStorage.removeItem('token');
-                  window.location.href = '/login';
-                }}
-              >
-                Logout
-              </button>
+              <div className="settings-header">
+                <h2>Profile Settings</h2>
+              </div>
+              <form className="settings-form">
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input
+                      type="text"
+                      defaultValue={user?.name || ''}
+                      placeholder="Enter your full name"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      defaultValue={user?.email || ''}
+                      placeholder="Enter your email"
+                      disabled
+                    />
+                    <small className="form-hint">Email cannot be changed</small>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="primary-btn">
+                    Update Profile
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Currency & Display Settings */}
+           <form className="settings-form" onSubmit={(e) => {
+              e.preventDefault();
+              alert('Preferences saved successfully!');
+            }}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Default Currency</label>
+                  <select 
+                    value={settings.currency}
+                    onChange={(e) => handleSettingsChange('currency', e.target.value)}
+                  >
+                    <option value="BDT">Bangladeshi Taka (৳)</option>
+                    <option value="USD">US Dollar ($)</option>
+                    <option value="EUR">Euro (€)</option>
+                    <option value="GBP">British Pound (£)</option>
+                    <option value="INR">Indian Rupee (₹)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Date Format</label>
+                  <select 
+                    value={settings.dateFormat}
+                    onChange={(e) => handleSettingsChange('dateFormat', e.target.value)}
+                  >
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Number Format</label>
+                  <select 
+                    value={settings.numberFormat}
+                    onChange={(e) => handleSettingsChange('numberFormat', e.target.value)}
+                  >
+                    <option value="1,234.56">1,234.56</option>
+                    <option value="1.234,56">1.234,56</option>
+                    <option value="1 234.56">1 234.56</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Dashboard Theme</label>
+                  <select 
+                    value={theme} 
+                    onChange={(e) => setTheme(e.target.value)}
+                  >
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="auto">Auto (System)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button type="submit" className="primary-btn">
+                  Save Preferences
+                </button>
+              </div>
+            </form>
+
+            {/* Notification Settings */}
+            <form className="settings-form" onSubmit={(e) => {
+              e.preventDefault();
+              alert('Preferences saved successfully!');
+            }}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Default Currency</label>
+                  <select 
+                    value={settings.currency}
+                    onChange={(e) => handleSettingsChange('currency', e.target.value)}
+                  >
+                    <option value="BDT">Bangladeshi Taka (৳)</option>
+                    <option value="USD">US Dollar ($)</option>
+                    <option value="EUR">Euro (€)</option>
+                    <option value="GBP">British Pound (£)</option>
+                    <option value="INR">Indian Rupee (₹)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Date Format</label>
+                  <select 
+                    value={settings.dateFormat}
+                    onChange={(e) => handleSettingsChange('dateFormat', e.target.value)}
+                  >
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Number Format</label>
+                  <select 
+                    value={settings.numberFormat}
+                    onChange={(e) => handleSettingsChange('numberFormat', e.target.value)}
+                  >
+                    <option value="1,234.56">1,234.56</option>
+                    <option value="1.234,56">1.234,56</option>
+                    <option value="1 234.56">1 234.56</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Dashboard Theme</label>
+                  <select 
+                    value={theme} 
+                    onChange={(e) => setTheme(e.target.value)}
+                  >
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="auto">Auto (System)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button type="submit" className="primary-btn">
+                  Save Preferences
+                </button>
+              </div>
+            </form>
+
+            {/* Privacy & Security */}
+            <div className="card">
+              <div className="settings-header">
+                <h2>Privacy & Security</h2>
+              </div>
+              <div className="settings-form">
+                <div className="security-section">
+                  <h4>Change Password</h4>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Current Password</label>
+                      <input
+                        type="password"
+                        placeholder="Enter current password"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>New Password</label>
+                      <input
+                        type="password"
+                        placeholder="Enter new password"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Confirm New Password</label>
+                      <input
+                        type="password"
+                        placeholder="Confirm new password"
+                      />
+                    </div>
+                  </div>
+                  <button type="button" className="secondary-btn">
+                    Update Password
+                  </button>
+                </div>
+
+                <div className="security-section">
+                  <h4>Data Privacy</h4>
+                  <div className="privacy-options">
+                    <div className="privacy-item">
+                      <div className="privacy-info">
+                        <h5>Data Export</h5>
+                        <p>Download all your financial data</p>
+                      </div>
+                      <button type="button" className="secondary-btn">
+                        Export Data
+                      </button>
+                    </div>
+                    
+                    <div className="privacy-item">
+                      <div className="privacy-info">
+                        <h5>Auto-logout</h5>
+                        <p>Automatically logout after inactivity</p>
+                      </div>
+                      <select defaultValue="30">
+                        <option value="15">15 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="60">1 hour</option>
+                        <option value="120">2 hours</option>
+                        <option value="0">Never</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Category Management */}
+            <div className="card">
+              <div className="settings-header">
+                <h2>Category Management</h2>
+              </div>
+              <div className="settings-form">
+                <h4>Custom Categories</h4>
+                <p className="settings-description">
+                  Manage your transaction categories. You can add custom categories or modify existing ones.
+                </p>
+                
+                <div className="category-list">
+                  {predefinedCategories.map(category => (
+                    <div key={category} className="category-item">
+                      <span className="category-name">{category}</span>
+                      <div className="category-actions">
+                        <button className="icon-btn edit" title="Edit category">
+                          Edit
+                        </button>
+                        <button className="icon-btn delete" title="Delete category">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="add-category">
+                  <input
+                    type="text"
+                    placeholder="Add new category"
+                    className="category-input"
+                  />
+                  <button type="button" className="primary-btn">
+                    Add Category
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Backup & Sync */}
+            <div className="card">
+              <div className="settings-header">
+                <h2>Backup & Sync</h2>
+              </div>
+              <div className="settings-form">
+                <div className="backup-section">
+                  <div className="backup-info">
+                    <h4>Automatic Backup</h4>
+                    <p>Your data is automatically backed up daily. Last backup: {new Date().toLocaleDateString()}</p>
+                  </div>
+                  
+                  <div className="backup-actions">
+                    <button type="button" className="secondary-btn">
+                      Create Backup Now
+                    </button>
+                    <button type="button" className="secondary-btn">
+                      Restore from Backup
+                    </button>
+                  </div>
+                </div>
+
+                <div className="sync-section">
+                  <h4>Data Sync Status</h4>
+                  <div className="sync-status">
+                    <span className="sync-indicator online">●</span>
+                    <span>All data synced</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* App Information */}
+            <div className="card">
+              <div className="settings-header">
+                <h2>About</h2>
+              </div>
+              <div className="settings-form">
+                <div className="app-info">
+                  <div className="info-item">
+                    <label>App Version:</label>
+                    <span>1.0.0</span>
+                  </div>
+                  <div className="info-item">
+                    <label>Last Updated:</label>
+                    <span>{new Date().toLocaleDateString()}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>Total Transactions:</label>
+                    <span>{transactions.length}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>Member Since:</label>
+                    <span>January 2024</span>
+                  </div>
+                </div>
+
+                <div className="app-links">
+                  <button type="button" className="link-btn">
+                    Privacy Policy
+                  </button>
+                  <button type="button" className="link-btn">
+                    Terms of Service
+                  </button>
+                  <button type="button" className="link-btn">
+                    Contact Support
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="card danger-zone">
+              <div className="settings-header">
+                <h2>Danger Zone</h2>
+              </div>
+              <div className="settings-form">
+                <div className="danger-actions">
+                  <div className="danger-item">
+                    <div className="danger-info">
+                      <h4>Clear All Data</h4>
+                      <p>This will permanently delete all your transactions, budgets, and bills.</p>
+                    </div>
+                    <button type="button" className="danger-btn">
+                      Clear Data
+                    </button>
+                  </div>
+                  
+                  <div className="danger-item">
+                    <div className="danger-info">
+                      <h4>Delete Account</h4>
+                      <p>Permanently delete your account and all associated data.</p>
+                    </div>
+                    <button type="button" className="danger-btn">
+                      Delete Account
+                    </button>
+                  </div>
+                  
+                  <div className="danger-item">
+                    <div className="danger-info">
+                      <h4>Logout</h4>
+                      <p>Sign out of your account on this device.</p>
+                    </div>
+                    <button 
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => {
+                        localStorage.removeItem('token');
+                        window.location.href = '/login';
+                      }}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         )}

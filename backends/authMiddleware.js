@@ -74,3 +74,35 @@ export const authorize = (roles = []) => {
     next();
   };
 };
+
+// services/auth.js
+class AuthService {
+  constructor() {
+    this.tokenKey = 'auth_token';
+  }
+
+  setToken(token) {
+    const expiry = new Date().getTime() + (24 * 60 * 60 * 1000);
+    sessionStorage.setItem(this.tokenKey, JSON.stringify({
+      token,
+      expiry
+    }));
+  }
+
+  getToken() {
+    const stored = sessionStorage.getItem(this.tokenKey);
+    if (!stored) return null;
+    
+    const { token, expiry } = JSON.parse(stored);
+    if (new Date().getTime() > expiry) {
+      this.removeToken();
+      return null;
+    }
+    return token;
+  }
+
+  isTokenValid() {
+    const token = this.getToken();
+    return token && !this.isTokenExpired(token);
+  }
+}
