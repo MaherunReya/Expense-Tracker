@@ -2138,9 +2138,9 @@ const Dashboard = () => {
                           <div className="budget-info">
                             <small>Alert at {budget.alertThreshold}%</small>
                             {percentage >= 100 && (
-                              <small className="over-text">
-                                Over by ${(spent - budget.monthlyLimit).toFixed(2)}
-                              </small>
+                           <small className="over-text">
+                              Over by {formatCurrency(spent - budget.monthlyLimit)}
+                            </small>
                             )}
                           </div>
                         </div>
@@ -2560,8 +2560,8 @@ const Dashboard = () => {
                         </div>
                         
                         <div className="debt-details">
-                          <div className="debt-balance">${debt.currentBalance.toFixed(2)}</div>
-                          <div className="debt-original">of ${debt.totalAmount.toFixed(2)}</div>
+                        <div className="debt-balance">{formatCurrency(debt.currentBalance)}</div>
+                        <div className="debt-original">of {formatCurrency(debt.totalAmount)}</div>
                           
                           {debt.lender && (
                             <div className="debt-lender">{debt.lender}</div>
@@ -2572,7 +2572,9 @@ const Dashboard = () => {
                           )}
                           
                           {debt.minimumPayment > 0 && (
-                            <div className="debt-payment">Min: ${debt.minimumPayment.toFixed(2)}/{debt.paymentFrequency}</div>
+                            <div className="debt-payment">
+                              Min: {formatCurrency(debt.minimumPayment)}/{debt.paymentFrequency}
+                            </div>                          
                           )}
                           
                           <div className="debt-progress">
@@ -2644,7 +2646,7 @@ const Dashboard = () => {
         <div className="tax-form">
           <div className="form-grid">
             <div className="form-group">
-              <label>Total Annual Income (BDT) *</label>
+              <label>Total Annual Income *</label>
               <input
                 type="number"
                 name="totalIncome"
@@ -2666,7 +2668,7 @@ const Dashboard = () => {
             </div>
             
             <div className="form-group">
-              <label>Basic Exemption (BDT)</label>
+              <label>Basic Exemption</label>
               <select name="basicExemption" value={taxFormData.basicExemption} onChange={handleTaxFormChange}>
                 <option value="350000">General Taxpayer (3.5 Lac)</option>
                 <option value="400000">Female/Senior Citizen (4 Lac)</option>
@@ -2676,7 +2678,7 @@ const Dashboard = () => {
             </div>
             
             <div className="form-group">
-              <label>Investment Allowance (BDT)</label>
+              <label>Investment Allowance</label>
               <input
                 type="number"
                 name="investment"
@@ -2687,7 +2689,7 @@ const Dashboard = () => {
             </div>
             
             <div className="form-group">
-              <label>Donation Allowance (BDT)</label>
+              <label>Donation Allowance</label>
               <input
                 type="number"
                 name="donation"
@@ -2698,7 +2700,7 @@ const Dashboard = () => {
             </div>
             
             <div className="form-group">
-              <label>Other Allowances (BDT)</label>
+              <label>Other Allowances</label>
               <input
                 type="number"
                 name="other"
@@ -2718,77 +2720,77 @@ const Dashboard = () => {
       )}
 
       {taxResult && (
-  <div className="tax-result">
-    <h3>Tax Calculation Result</h3>
-    <div className="result-summary">
-      <div className="result-item">
-        <label>Total Income:</label>
-        <span>৳{(taxResult.totalIncome || 0).toLocaleString()}</span>
-      </div>
-      <div className="result-item">
-        <label>Taxable Income:</label>
-        <span>৳{(taxResult.taxableIncome || 0).toLocaleString()}</span>
-      </div>
-      <div className="result-item total-tax">
-        <label>Total Tax Payable:</label>
-        <span>৳{(taxResult.totalTax || 0).toLocaleString()}</span>
-      </div>
-    </div>
-    
-    {taxResult.taxBreakdown && taxResult.taxBreakdown.length > 0 && (
-      <div className="tax-breakdown">
-        <h4>Tax Breakdown by Slabs:</h4>
-        <table>
-          <thead>
-            <tr>
-              <th>Tax Rate</th>
-              <th>Taxable Amount</th>
-              <th>Tax Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {taxResult.taxBreakdown.map((slab, index) => (
-              <tr key={index}>
-                <td>{slab.slabRate || 0}%</td>
-                <td>৳{(slab.slabIncome || 0).toLocaleString()}</td>
-                <td>৳{(slab.taxAmount || 0).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )}
-    
-    <button className="secondary-btn" onClick={saveTaxEstimation}>
-      Save Estimation
-    </button>
-  </div>
-)}
+          <div className="tax-result">
+            <h3>Tax Calculation Result</h3>
+            <div className="result-summary">
+              <div className="result-item">
+                <label>Total Income:</label>
+                <span>{formatCurrency(taxResult.totalIncome || 0)}</span>
+              </div>
+              <div className="result-item">
+                <label>Taxable Income:</label>
+                <span>{formatCurrency(taxResult.taxableIncome || 0)}</span>              
+                </div>
+              <div className="result-item total-tax">
+                <label>Total Tax Payable:</label>
+                <span>{formatCurrency(taxResult.totalTax || 0)}</span>             
+             </div>
+            </div>
+            
+            {taxResult.taxBreakdown && taxResult.taxBreakdown.length > 0 && (
+              <div className="tax-breakdown">
+                <h4>Tax Breakdown by Slabs:</h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Tax Rate</th>
+                      <th>Taxable Amount</th>
+                      <th>Tax Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {taxResult.taxBreakdown.map((slab, index) => (
+                      <tr key={index}>
+                        <td>{slab.slabRate || 0}%</td>
+                        <td>{formatCurrency(slab.slabIncome || 0)}</td>
+                        <td>{formatCurrency(slab.taxAmount || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            <button className="secondary-btn" onClick={saveTaxEstimation}>
+              Save Estimation
+            </button>
+          </div>
+        )}
 
-{taxEstimations.length > 0 && (
-  <div className="saved-estimations">
-    <h3>Saved Tax Estimations</h3>
-    <div className="estimations-list">
-      {taxEstimations.slice(0, 5).map(estimation => (
-        <div key={estimation._id} className="estimation-card">
-          <div className="estimation-header">
-            <h4>Tax Year {estimation.taxYear || 'Unknown'}</h4>
-            <span className="estimation-date">
-              {new Date(estimation.createdAt).toLocaleDateString()}
-            </span>
+        {taxEstimations.length > 0 && (
+          <div className="saved-estimations">
+            <h3>Saved Tax Estimations</h3>
+            <div className="estimations-list">
+              {taxEstimations.slice(0, 5).map(estimation => (
+                <div key={estimation._id} className="estimation-card">
+                  <div className="estimation-header">
+                    <h4>Tax Year {estimation.taxYear || 'Unknown'}</h4>
+                    <span className="estimation-date">
+                      {new Date(estimation.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="estimation-details">
+                    <p>Income: {formatCurrency(estimation.totalIncome || 0)}</p>
+                    <p>Tax: {formatCurrency(estimation.totalTax || 0)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="estimation-details">
-            <p>Income: ৳{(estimation.totalIncome || 0).toLocaleString()}</p>
-            <p>Tax: ৳{(estimation.totalTax || 0).toLocaleString()}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-    </div>
-  </>
-)}
+        )}
+            </div>
+          </>
+        )}
 
         {activePage === 'category' && (
           <>
@@ -2812,8 +2814,8 @@ const Dashboard = () => {
                     {Object.entries(categorySummary).map(([title, values]) => (
                       <tr key={title}>
                         <td>{title}</td>
-                        <td className="income">${values.income.toFixed(2)}</td>
-                        <td className="expense">${values.expense.toFixed(2)}</td>
+                        <td className="income">{formatCurrency(values.income)}</td>
+                        <td className="expense">{formatCurrency(values.expense)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2894,9 +2896,9 @@ const Dashboard = () => {
                     {Object.entries(monthlySummary).map(([month, values]) => (
                       <tr key={month}>
                         <td>{new Date(`${month}-01`).toLocaleString('default', { month: 'long' })}</td>
-                        <td className="income">${values.income.toFixed(2)}</td>
-                        <td className="expense">${values.expense.toFixed(2)}</td>
-                        <td>${(values.income - values.expense).toFixed(2)}</td>
+                        <td className="income">{formatCurrency(values.income)}</td>
+                        <td className="expense">{formatCurrency(values.expense)}</td>
+                        <td>{formatCurrency(values.income - values.expense)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2920,9 +2922,9 @@ const Dashboard = () => {
                     {Object.entries(yearlySummary).map(([year, values]) => (
                       <tr key={year}>
                         <td>{year}</td>
-                        <td className="income">${values.income.toFixed(2)}</td>
-                        <td className="expense">${values.expense.toFixed(2)}</td>
-                        <td>${(values.income - values.expense).toFixed(2)}</td>
+                        <td className="income">{formatCurrency(values.income)}</td>
+                        <td className="expense">{formatCurrency(values.expense)}</td>
+                        <td>{formatCurrency(values.income - values.expense)}</td>
                       </tr>
                     ))}
                   </tbody>
